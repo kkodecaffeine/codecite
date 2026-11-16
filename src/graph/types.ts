@@ -136,6 +136,23 @@ export interface ExtractedSymbol {
   triggeredBy?: string[];
   /** 호출·데코레이터 자리. 탐지 단계만 읽고 결과 레코드에는 저장하지 않는다(CodeSite 주석) */
   sites?: CodeSite[];
+  /**
+   * 클래스 심볼에만 단다. 필드와 생성자 매개변수 속성의 이름·타입·데코레이터
+   * `this.<이름>` 받는 쪽을 주입된 타입이나 데코레이터(엔티티 컬럼, 주입 저장소·큐)와 잇는 데 쓴다. 탐지용 중간 데이터라 결과 레코드에는 저장하지 않는다
+   */
+  members?: ClassMember[];
+}
+
+/** 클래스의 필드나 생성자 매개변수 속성 하나 */
+export interface ClassMember {
+  name: string;
+  /** 타입 표기 글(`Repository<Order>`, `OrderStatus`). 없으면 비운다 */
+  type?: string;
+  line: number;
+  /** 생성자 매개변수에서 온 것인지(매개변수 속성이나 데코레이터가 붙은 주입 매개변수) */
+  parameter?: boolean;
+  /** 이 멤버에 붙은 데코레이터 자리. 값 인자는 sites 와 같은 규칙으로 가린다 */
+  decorators: CodeSite[];
 }
 
 /**
