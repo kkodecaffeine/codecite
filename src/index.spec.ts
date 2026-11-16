@@ -6,7 +6,7 @@ describe('codecite', () => {
     expect(codecite.version).toBe('0.0.0');
   });
 
-  it('허브, 설정 읽기, 어댑터, 프롬프트를 공개 API 로 내보낸다', () => {
+  it('허브, 설정 읽기, 어댑터, 프롬프트, 서버를 공개 API 로 내보낸다', () => {
     for (const name of [
       'createCodecite',
       'loadConfig',
@@ -20,6 +20,8 @@ describe('codecite', () => {
       'planQuestion',
       'buildPolicyAnswerPrompt',
       'createConsoleLogger',
+      'createRequestHandler',
+      'startServer',
     ] as const) {
       expect(typeof codecite[name], name).toBe('function');
     }

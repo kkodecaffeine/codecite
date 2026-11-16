@@ -1,3 +1,4 @@
+import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import type { RetrievalMode } from './retrieval/types.js';
 import type {
   Embedder,
@@ -126,3 +127,34 @@ export interface LoadedConfig {
 
 /** 로그 수준. 낮은 것부터 debug, info, warn, error */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/** `createRequestHandler` 가 돌려주는 요청 처리 함수. 실패해도 throw 하지 않고 오류 응답을 보낸다 */
+export type CodeciteRequestHandler = (
+  request: IncomingMessage,
+  response: ServerResponse,
+) => Promise<void>;
+
+/** `createRequestHandler` 선택 사항 */
+export interface CodeciteRequestHandlerOptions {
+  /** 요청마다 경로, 상태, 걸린 시간을 남긴다. 질문 본문은 넘기지 않는다 */
+  logger?: Logger;
+  /** 요청 본문 상한(바이트). 넘으면 413 으로 답한다. 없으면 16 KB */
+  maxBodyBytes?: number;
+}
+
+/** `startServer` 선택 사항 */
+export interface CodeciteServerOptions extends CodeciteRequestHandlerOptions {
+  /** 없으면 8787. 0 이면 빈 포트를 고른다 */
+  port?: number;
+  /** 없으면 127.0.0.1 */
+  host?: string;
+}
+
+/** 요청을 받고 있는 서버 */
+export interface CodeciteServer {
+  readonly server: Server;
+  /** 실제로 받고 있는 주소(예: `http://127.0.0.1:8787`) */
+  readonly url: string;
+  /** 새 연결을 막고, 처리 중인 요청이 끝나면 닫는다 */
+  close(): Promise<void>;
+}

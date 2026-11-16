@@ -16,6 +16,7 @@ export {
 } from './adapters/json-index-cache.js';
 export { InMemoryVectorIndex } from './retrieval/vector-index.js';
 export { buildPolicyAnswerPrompt, planQuestion } from './generation/prompts.js';
+export { createRequestHandler, startServer } from './server.js';
 
 export type {
   Codecite,
@@ -26,6 +27,10 @@ export type {
   CodeciteLimits,
   CodeciteOptions,
   CodeciteProviderConfig,
+  CodeciteRequestHandler,
+  CodeciteRequestHandlerOptions,
+  CodeciteServer,
+  CodeciteServerOptions,
   CodeciteTrace,
   LoadConfigOptions,
   LoadedConfig,

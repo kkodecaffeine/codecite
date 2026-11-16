@@ -9,6 +9,9 @@
     "node": ">=22.13"
   },
   "main": "./dist/index.js",
+  "bin": {
+    "codecite": "./dist/cli.js"
+  },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {

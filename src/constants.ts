@@ -16,3 +16,13 @@ export const DEFAULT_ANSWER_TIMEOUT_MS = 120_000;
 /** 로그 수준의 높낮이 */
 export const LOG_LEVEL_ORDER: Readonly<Record<LogLevel, number>> =
   Object.freeze({ debug: 10, info: 20, warn: 30, error: 40 });
+
+/** `codecite serve` 기본 주소. 바깥에서 들어오지 않도록 기본은 이 컴퓨터에서 오는 요청만 받는다 */
+export const DEFAULT_SERVER_HOST = '127.0.0.1';
+export const DEFAULT_SERVER_PORT = 8787;
+
+/** 요청 본문 상한(바이트). 질문 하나에는 넉넉하고, 큰 본문으로 메모리를 채우지 못하게 막는다 */
+export const DEFAULT_MAX_REQUEST_BODY_BYTES = 16 * 1024;
+
+/** 서버 응답의 형식 */
+export const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
