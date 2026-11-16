@@ -1,4 +1,4 @@
-import type { PolicyContextKind } from './types.js';
+import type { PolicyClaimFacet, PolicyContextKind } from './types.js';
 
 export const POLICY_CONTEXT_KINDS = [
   'policy',
@@ -62,3 +62,21 @@ export const EVIDENCE_ONLY_HEADINGS = new Set([
   POLICY_PROCEDURE_CALLEES_HEADING,
   POLICY_PROCEDURE_DEFERRED_HEADING,
 ]);
+
+/** claim 종류 전체. 객체 키로 적어 두어 `PolicyClaimFacet` 에 값이 늘면 타입 검사가 빠진 값을 알려 준다 */
+const POLICY_CLAIM_FACET_KEYS: Readonly<Record<PolicyClaimFacet, true>> = {
+  outcome: true,
+  eligibility: true,
+  amount: true,
+  duration: true,
+  schedule: true,
+  expiration: true,
+  exception: true,
+  reversal: true,
+  procedure: true,
+};
+
+/** CSV 의 `claim_facet` 과 질문 계획의 facets 가 받을 수 있는 값 */
+export const POLICY_CLAIM_FACETS: readonly PolicyClaimFacet[] = Object.freeze(
+  Object.keys(POLICY_CLAIM_FACET_KEYS) as PolicyClaimFacet[],
+);

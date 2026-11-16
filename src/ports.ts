@@ -46,3 +46,23 @@ export interface VectorIndex {
     options?: VectorSearchOptions,
   ): Promise<PolicyChunk[]>;
 }
+
+/** 답변 모델에 보내는 요청 하나 */
+export interface LlmCompletionRequest {
+  /** 모델이 지킬 지시문 */
+  system: string;
+  /** 경계 태그로 감싼 질문과 근거 */
+  user: string;
+  /** true 면 JSON 객체 하나만 돌려 달라고 요청한다. 지시문에도 JSON 이라는 말을 넣어야 받아 주는 모델이 있다 */
+  json?: boolean;
+  /** 호출자가 기다림을 끊을 때 쓴다 */
+  signal?: AbortSignal;
+}
+
+/**
+ * 답변 모델을 부르는 포트. 모델이 쓴 글을 그대로 돌려줄 뿐 답변 검사·계약·정제는 하지 않는다
+ * 요청이 실패하거나 시간을 넘기거나 빈 글이 오면 throw 한다. 허브는 그때 결정적 답변으로 물러난다
+ */
+export interface LlmClient {
+  complete(request: LlmCompletionRequest): Promise<string>;
+}

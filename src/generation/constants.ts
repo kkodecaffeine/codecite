@@ -165,3 +165,13 @@ export const DEFAULT_INVENTED_CONDITION_TERMS: readonly string[] = [
   '결제 수단에 따라',
   '다를 수 있',
 ];
+
+/** 질문 계획을 기다리는 시간. 계획은 검색을 돕는 선택 단계라 길게 기다리지 않고 건너뛴다 */
+export const QUESTION_PLAN_TIMEOUT_MS = 5_000;
+
+/** 질문 계획에서 받는 검색 낱말 수와 낱말 하나의 최대 글자 수. 더 긴 것은 문장으로 보고 버린다 */
+export const QUESTION_PLAN_MAX_SEARCH_TERMS = 5;
+export const QUESTION_PLAN_MAX_TERM_CHARS = 60;
+
+/** 질문 계획에서 받는 claim 종류 수 */
+export const QUESTION_PLAN_MAX_FACETS = 3;

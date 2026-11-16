@@ -1,4 +1,9 @@
-import type { PolicyClaimProps, PolicyContextKind } from '../domain/types.js';
+import type {
+  PolicyClaimFacet,
+  PolicyClaimProps,
+  PolicyContextKind,
+} from '../domain/types.js';
+import type { Logger } from '../ports.js';
 import type { Vocabulary } from '../text/types.js';
 
 /**
@@ -107,4 +112,34 @@ export interface AnswerGuardResult {
   answer: string;
   replaced: boolean;
   reason?: AnswerGuardReason;
+}
+
+/** 답변 프롬프트 재료. evidence 는 근거 묶기를 거친 것만 넘긴다 */
+export interface PolicyAnswerPromptInput {
+  question: string;
+  evidence: readonly PolicyEvidence[];
+  /** 답 길이 모드. 답변 계약과 같은 항목 수 상한을 프롬프트에 적는다. 없으면 default */
+  answerMode?: PolicyAnswerMode;
+}
+
+/** 답변 모델에 보낼 지시문과 사용자 글 한 벌 */
+export interface PolicyAnswerPrompt {
+  system: string;
+  user: string;
+}
+
+/** 질문 계획. 검색에 더할 낱말과 질문이 원하는 claim 종류(중요한 순서) */
+export interface QuestionPlan {
+  searchTerms: string[];
+  facets: PolicyClaimFacet[];
+}
+
+/** 질문 계획을 부를 때의 선택 사항 */
+export interface QuestionPlanOptions {
+  /** 호출자가 계획을 끊을 때 쓴다 */
+  signal?: AbortSignal;
+  /** 계획을 기다리는 최대 시간(밀리초). 없으면 기본값을 쓴다 */
+  timeoutMs?: number;
+  /** 계획이 실패한 까닭을 남긴다. 질문 본문은 남기지 않는다 */
+  logger?: Logger;
 }
