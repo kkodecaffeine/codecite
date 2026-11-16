@@ -1,0 +1,66 @@
+{
+  "links": [
+    {
+      "relation": "GRAPHQL_CALLS",
+      "from": "shop-web:src/orders/order-page.tsx#OrderPage",
+      "to": "shop-api:src/orders/order.resolver.ts#OrderResolver.findOrder"
+    },
+    {
+      "relation": "HTTP_CALLS",
+      "from": "shop-web:src/lib/api.ts#cancelOrder",
+      "to": "shop-api:src/orders/order.controller.ts#OrderController.cancel"
+    },
+    {
+      "relation": "HTTP_CALLS",
+      "from": "shop-web:src/lib/api.ts#issueCoupon",
+      "to": "shop-api:src/coupons/coupon.controller.ts#CouponController.issue"
+    },
+    {
+      "relation": "HTTP_CALLS",
+      "from": "shop-web:src/lib/api.ts#listCoupons",
+      "to": "shop-api:src/coupons/coupon.controller.ts#CouponController.list"
+    },
+    {
+      "relation": "HTTP_CALLS",
+      "from": "shop-worker:worker/tasks.py#earn_points",
+      "to": "shop-api:src/points/point.controller.ts#PointController.earn"
+    }
+  ],
+  "unresolved": [
+    {
+      "reason": "ambiguous-provider",
+      "relation": "HTTP_CALLS",
+      "at": "shop-worker:worker/tasks.py#check_status"
+    },
+    {
+      "reason": "dynamic-target",
+      "relation": "HTTP_CALLS",
+      "at": "shop-web:src/lib/api.ts#getJson"
+    },
+    {
+      "reason": "external",
+      "relation": "HTTP_CALLS",
+      "at": "shop-worker:worker/tasks.py#request_refund"
+    },
+    {
+      "reason": "no-caller",
+      "relation": "CONSUMES_FROM_QUEUE",
+      "at": "shop-worker:worker/tasks.py#request_refund"
+    },
+    {
+      "reason": "no-caller",
+      "relation": "HTTP_CALLS",
+      "at": "shop-api:src/orders/order.controller.ts#OrderController.find"
+    }
+  ],
+  "entities": {
+    "coupons": ["members"],
+    "members": [],
+    "orders": ["members"]
+  },
+  "fieldWriters": [
+    "shop-api:expired",
+    "shop-api:pointBalance",
+    "shop-api:status"
+  ]
+}

@@ -1,0 +1,25 @@
+{
+  "output": "../.codecite/graph",
+  "cache": "../.codecite/graph-cache",
+  "repositories": [
+    { "name": "shop-api", "path": "../.codecite/repos/shop-api" },
+    { "name": "shop-web", "path": "../.codecite/repos/shop-web" },
+    { "name": "shop-worker", "path": "../.codecite/repos/shop-worker" }
+  ],
+  "presets": [
+    "celery",
+    "fetch",
+    "graphql-codegen",
+    "nestjs",
+    "nextjs",
+    "python-requests",
+    "typeorm"
+  ],
+  "hints": {
+    "baseUrls": {
+      "SHOP_API_URL": "shop-api",
+      "NEXT_PUBLIC_SHOP_API_URL": "shop-api"
+    },
+    "external": ["pay.example.com"]
+  }
+}

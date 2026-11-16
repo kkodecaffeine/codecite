@@ -61,3 +61,27 @@ npx codecite eval
 결과는 `baseline.json` 과 질문별로 비교합니다. 기준선에서 맞던 항목(hitAny, hitAll, status)이 틀려지거나 기준선의 질문이 사라지면 회귀로 보고 종료 코드 1 로 끝납니다. 나아진 질문은 알리기만 하고 실패로 치지 않습니다. CI 는 `npm run eval` 로 PR 마다 이 검사를 돌립니다.
 
 기대값은 내용 해시 id 이므로 claim 문장이나 종류를 고치면 id 가 바뀝니다. 그때는 골든 질문의 기대값도 함께 다시 봅니다. 골든 질문은 스크립트가 덮어쓰지 않고 사람이 PR 로만 고칩니다.
+
+## 저장소 그래프 예제
+
+`repos/` 에는 도토리 마켓의 가상 서비스 저장소 세 개가 있습니다. `codecite graph` 가 저장소 사이 관계를 어떻게 잇는지 보여 주는 예제이자, CI 의 그래프 회귀 검사 입력입니다.
+
+| 저장소        | 기술                            | 담은 것                                                                    |
+| ------------- | ------------------------------- | -------------------------------------------------------------------------- |
+| `shop-api`    | NestJS, TypeORM, GraphQL, Bull  | 주문·쿠폰·적립금 라우트, 주문 리졸버, 환불 큐, 쿠폰 만료 예약 작업, 엔티티 |
+| `shop-web`    | Next.js, fetch, GraphQL codegen | 주문 취소·쿠폰 호출, 주문 조회 연산, 상태 확인 라우트                      |
+| `shop-worker` | Python, Celery, requests        | 적립금 지급 작업과 shop-api 호출, 바깥 결제 대행사 호출                    |
+
+일부러 넣은 못 잇는 경우는 다음과 같습니다.
+
+- `getJson`: 주소를 인자로 받아 정적으로 읽을 수 없습니다(`dynamic-target`).
+- `request_refund`: 바깥 결제 대행사 호출입니다(`external`).
+- `check_status`: `/api/status` 를 shop-api 와 shop-web 이 모두 받아 하나로 정할 수 없습니다(`ambiguous-provider`).
+
+```bash
+# 저장소 루트에서
+npm run build
+npm run example:graph
+```
+
+`graph/prepare-repos.mjs` 는 `repos/*` 를 `.codecite/` 아래 git 원격과 클론으로 만듭니다. codecite 는 작업 트리가 아니라 원격 기본 브랜치의 커밋을 읽기 때문입니다. 커밋 시각과 작성자를 고정해 몇 번을 만들어도 같은 결과가 나옵니다. 기대 결과는 `graph/expected-links.json` 에 있습니다.

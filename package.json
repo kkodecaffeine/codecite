@@ -36,7 +36,8 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "eval": "node dist/cli.js eval --cwd examples/dotori-market"
+    "eval": "node dist/cli.js eval --cwd examples/dotori-market",
+    "example:graph": "node examples/dotori-market/graph/prepare-repos.mjs && node dist/cli.js graph build --cwd examples/dotori-market/graph && node dist/cli.js graph report --cwd examples/dotori-market/graph"
   },
   "peerDependencies": {
     "typescript": ">=5"

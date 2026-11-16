@@ -1,0 +1,10 @@
+{
+  "name": "shop-web",
+  "private": true,
+  "dependencies": {
+    "next": "^14.0.0"
+  },
+  "devDependencies": {
+    "@graphql-codegen/cli": "^5.0.0"
+  }
+}
