@@ -133,7 +133,11 @@ export const FIELD_WRITER_SKIPPED_SEGMENTS: readonly string[] = [
   '__proto__',
 ];
 /** 생성자 심볼의 끝 이름. 생성자에서 매개변수를 그대로 받아 두는 대입(주입)은 상태 쓰기가 아니다 */
-export const CONSTRUCTOR_NAMES: readonly string[] = ['constructor', '__init__'];
+export const CONSTRUCTOR_NAMES: readonly string[] = [
+  'constructor',
+  '__init__',
+  'init',
+];
 
 /** 대입 대상이 이름과 점으로만 이어진 속성 연쇄인지(`order.status`, `this.#balance`) */
 export const PROPERTY_CHAIN_PATTERN =

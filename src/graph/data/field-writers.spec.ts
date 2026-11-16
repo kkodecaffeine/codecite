@@ -310,7 +310,7 @@ describe('buildFieldWriterIndex: 모으기', () => {
     expect(index.writers['shop-api:status'][0].entity).toBe('orders');
   });
 
-  it('지역 변수 하나, 전역 객체, 환경 변수, 내보내기, 생성자 주입, 선언, 테스트 경로는 뺀다', () => {
+  it('지역 변수 하나, 전역 객체, 환경 변수, 내보내기, 생성자 주입(Swift init 포함), 선언, 테스트 경로는 뺀다', () => {
     const index = buildFieldWriterIndex(
       stateOf(
         [
@@ -328,6 +328,10 @@ describe('buildFieldWriterIndex: 모으기', () => {
           method('src/cart/cart.service.ts', 'CartService.constructor', 1, [
             assigns(1, 'this.carts', 'carts'),
             assigns(1, 'this.limit', '30'),
+          ]),
+          method('Sources/Cart/CartViewModel.swift', 'CartViewModel.init', 1, [
+            assigns(2, 'self.cartService', 'cartService'),
+            assigns(3, 'self.pageSize', '20'),
           ]),
           method(
             'src/cart/cart.constants.ts',
@@ -365,6 +369,7 @@ describe('buildFieldWriterIndex: 모으기', () => {
     expect(Object.keys(index.writers)).toEqual([
       'shop-api:discount',
       'shop-api:limit',
+      'shop-api:pageSize',
     ]);
   });
 });
