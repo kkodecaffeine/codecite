@@ -1,5 +1,5 @@
 import { lstat, open } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import {
   EMPTY_FILE_SKIP_COUNTS,
   GRAPH_BINARY_PROBE_BYTES,
@@ -170,6 +170,11 @@ export async function readSourceFiles(
     files.push({ repository, filePath, content: stripByteOrderMark(content) });
   }
   return { files, skipped };
+}
+
+/** 기준 폴더에서 본 상대 경로(`/` 구분). 결과와 오류 메시지에 이 컴퓨터의 절대 경로를 남기지 않으려고 쓴다 */
+export function portablePath(base: string, path: string): string {
+  return relative(base, path).split(sep).join('/') || '.';
 }
 
 /** 정렬 순서를 실행 환경의 언어 설정과 상관없이 고정한다 */

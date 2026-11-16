@@ -5,12 +5,20 @@ export {
   loadGraphConfig,
   parseGraphConfig,
 } from './config.js';
+export { createConstantResolver } from './constant-resolver.js';
 export {
   GRAPH_CONFIG_FILE,
+  GRAPH_DETECTIONS_FILE,
   GRAPH_DEFAULT_EXCLUDES,
   GRAPH_DEFAULT_OUTPUT,
   GRAPH_FLOOR_EXCLUDES,
 } from './constants.js';
+export {
+  detectionsArtifact,
+  parseDetectionsArtifact,
+  runDetection,
+  sortDetections,
+} from './detect.js';
 export {
   isFloorExcluded,
   matchesAnyGlob,
@@ -24,6 +32,7 @@ export {
   validateGraphManifest,
 } from './output.js';
 export { buildCodeGraph } from './pipeline.js';
+export { isDetectionPreset, resolvePresets } from './presets/registry.js';
 export {
   contentHash,
   policyGroupFor,

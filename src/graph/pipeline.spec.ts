@@ -24,8 +24,10 @@ import { parseGraphConfig } from './config.js';
 import { GraphCollapseError } from './output.js';
 import { buildCodeGraph } from './pipeline.js';
 import type {
+  DetectionPreset,
   ExtractedSymbol,
   GraphConfig,
+  MessageDetection,
   SourceFile,
   SymbolExtractor,
 } from './types.js';
@@ -154,6 +156,35 @@ function fakeExtractor(calls: SourceFile[][] = []): SymbolExtractor {
   };
 }
 
+// ── 가짜 프리셋: `acornQueue.push` 호출 자리를 큐 발행으로 본다 ──
+
+function acornQueuePreset(
+  calls: string[] = [],
+  languages = ['typescript'],
+): DetectionPreset {
+  return {
+    name: 'acorn-queue',
+    languages,
+    detect(symbol, context) {
+      calls.push(`${context.repository}:${symbol.symbol}`);
+      return (symbol.sites ?? [])
+        .filter((site) => site.name === 'acornQueue.push')
+        .map((site): MessageDetection => ({
+          kind: 'queue-publish',
+          repository: context.repository,
+          filePath: symbol.filePath,
+          symbol: symbol.symbol,
+          line: site.line,
+          detector: 'acorn-queue',
+          confidence: 0.8,
+          evidence: `acornQueue.push in ${symbol.symbol}`,
+          name: `${symbol.symbol}-queue`,
+          dynamic: false,
+        }));
+    },
+  };
+}
+
 // 비밀값 모양은 소스에 글자 그대로 두지 않고 실행할 때 만든다
 const FAKE_SECRET = ['dotori', 'Vault', String(6 * 7), 'acorn'].join('-');
 
@@ -220,6 +251,7 @@ describe('buildCodeGraph', { timeout: 60_000 }, () => {
     const result = await buildCodeGraph(config);
 
     expect(result.files).toEqual([
+      'detections.json',
       'manifest.json',
       'symbols/shop-api.jsonl',
       'symbols/shop-web.jsonl',
@@ -451,5 +483,137 @@ describe('buildCodeGraph', { timeout: 60_000 }, () => {
         extractors: [fakeExtractor(), { ...fakeExtractor(), name: 'other' }],
       }),
     ).rejects.toThrow(/extension \.ts is claimed by both fake-ts and other/);
+  });
+});
+
+describe('buildCodeGraph 탐지 단계', { timeout: 60_000 }, () => {
+  const withPresets = (extra: Record<string, unknown> = {}) =>
+    configFor({ presets: ['acorn-queue'], ...extra });
+
+  it('켠 프리셋으로 탐지해 detections.json 에 쓰고, 재사용한 저장소는 프리셋을 부르지 않고 지난 탐지 결과를 쓴다', async () => {
+    const config = withPresets();
+    const first = await buildCodeGraph(config, {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset()],
+    });
+    expect(first.files).toContain('detections.json');
+    const tree = await readTree(config.output);
+    const detections = JSON.parse(tree['detections.json']);
+    expect(Object.keys(detections.repositories)).toEqual([
+      'shop-api',
+      'shop-web',
+    ]);
+    expect(
+      detections.repositories['shop-api'].detections.map(
+        (item: MessageDetection) => `${item.filePath}:${item.name}`,
+      ),
+    ).toEqual([
+      'src/points/earn.ts:earnPoints-queue',
+      'src/points/earn.ts:previewPoints-queue',
+      'src/refund/refund.ts:requestRefund-queue',
+      'src/refund/refund.ts:connectPayments-queue',
+    ]);
+    expect(detections.repositories['shop-web'].detections).toHaveLength(1);
+    for (const local of [root, tmpdir(), await realpath(tmpdir()), homedir()]) {
+      expect(tree['detections.json']).not.toContain(local);
+    }
+
+    const calls: string[] = [];
+    const second = await buildCodeGraph(config, {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset(calls)],
+    });
+    expect(second.reused).toEqual({ 'shop-api': true, 'shop-web': true });
+    expect(calls).toEqual([]);
+    expect(await readTree(config.output)).toEqual(tree);
+  });
+
+  it('presets·detectors·presetModules 나 켠 프리셋이 바뀌면 커밋이 같아도 다시 추출하고 다시 탐지한다', async () => {
+    await buildCodeGraph(withPresets(), {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset()],
+    });
+
+    const calls: string[] = [];
+    const wider = await buildCodeGraph(withPresets(), {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset(calls, ['typescript', 'javascript'])],
+    });
+    expect(wider.reused).toEqual({ 'shop-api': false, 'shop-web': false });
+    expect(calls).toHaveLength(5);
+
+    const off = await buildCodeGraph(configFor(), {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset()],
+    });
+    expect(off.reused).toEqual({ 'shop-api': false, 'shop-web': false });
+    const detections = JSON.parse(
+      await readFile(join(off.output, 'detections.json'), 'utf8'),
+    );
+    expect(detections.repositories['shop-api'].detections).toEqual([]);
+
+    const rules = await buildCodeGraph(
+      configFor({
+        detectors: [
+          { kind: 'queue-publisher', call: 'acornQueue.push', nameArgument: 0 },
+        ],
+      }),
+      {
+        extractors: [fakeExtractor()],
+        rulesPreset: () => ({ ...acornQueuePreset(), name: 'rules' }),
+      },
+    );
+    expect(rules.reused).toEqual({ 'shop-api': false, 'shop-web': false });
+
+    await writeFile(
+      join(root, 'graph', 'acorn-presets.mjs'),
+      "export default { name: 'acorn-extra', detect: () => [] };\n",
+    );
+    const modules = await buildCodeGraph(
+      configFor({
+        detectors: [
+          { kind: 'queue-publisher', call: 'acornQueue.push', nameArgument: 0 },
+        ],
+        presetModules: ['./acorn-presets.mjs'],
+      }),
+      {
+        extractors: [fakeExtractor()],
+        rulesPreset: () => ({ ...acornQueuePreset(), name: 'rules' }),
+      },
+    );
+    expect(modules.reused).toEqual({ 'shop-api': false, 'shop-web': false });
+  });
+
+  it('지난 detections.json 이 없거나 깨졌으면 재사용하지 않고 다시 탐지한다', async () => {
+    const config = withPresets();
+    await buildCodeGraph(config, {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset()],
+    });
+    await rm(join(config.output, 'detections.json'));
+    const calls: string[] = [];
+    const missing = await buildCodeGraph(config, {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset(calls)],
+    });
+    expect(missing.reused).toEqual({ 'shop-api': false, 'shop-web': false });
+    expect(calls).toHaveLength(5);
+
+    await writeFile(join(config.output, 'detections.json'), '{ not json');
+    const broken = await buildCodeGraph(config, {
+      extractors: [fakeExtractor()],
+      presets: [acornQueuePreset()],
+    });
+    expect(broken.reused).toEqual({ 'shop-api': false, 'shop-web': false });
+  });
+
+  it('모르는 프리셋 이름이면 저장소를 꺼내기 전에 멈춘다', async () => {
+    await expect(
+      buildCodeGraph(configFor({ presets: ['acorn-mail'] }), {
+        presets: [acornQueuePreset()],
+      }),
+    ).rejects.toThrow(
+      'unknown preset "acorn-mail" in presets. Known presets: acorn-queue',
+    );
   });
 });

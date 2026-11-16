@@ -11,6 +11,7 @@ import type {
 } from '../extensions/code-knowledge.js';
 import type { Logger } from '../ports.js';
 import type { SnapshotWorkspace } from './snapshot.js';
+import type { TypeScriptModule } from './extractors/types.js';
 
 // ── 설정: codecite.graph.json ──
 
@@ -389,6 +390,10 @@ export interface BuildCodeGraphOptions {
   now?: () => Date;
   /** 심볼 수가 절반 아래로 줄어도 멈추지 않을 저장소 이름. 줄어든 까닭을 확인한 뒤에만 쓴다 */
   acceptSymbolDrop?: readonly string[];
+  /** 고를 수 있는 탐지 프리셋. 설정 presets 의 이름으로 고른다(resolvePresets) */
+  presets?: readonly DetectionPreset[];
+  /** 설정 detectors 규칙을 프리셋 하나로 만든다. 설정에 detectors 가 있으면 있어야 한다 */
+  rulesPreset?: (rules: readonly GraphDetectorRule[]) => DetectionPreset;
 }
 
 /** 저장소 하나를 만들 때 파이프라인이 넘기는 것 */
@@ -405,6 +410,10 @@ export interface RepositoryBuildContext {
   localRoots: readonly string[];
   logger: Logger;
   acceptSymbolDrop: readonly string[];
+  /** 켠 탐지 프리셋. 바뀌면 커밋이 같아도 다시 만든다 */
+  presets: readonly DetectionPreset[];
+  /** 지난 detections.json 의 이 저장소 몫. 없으면 재사용하지 않는다 */
+  previousDetections: RepositoryDetectionState | undefined;
 }
 
 /** 저장소 하나의 만들기 결과 */
@@ -418,6 +427,8 @@ export interface RepositoryBuild {
    * 재사용한 저장소는 다시 추출하지 않으므로 비어 있다
    */
   extracted?: ExtractedSymbol[];
+  /** 재사용한 저장소의 지난 탐지 결과. 다시 추출한 저장소는 비어 있고 탐지 단계가 새로 만든다 */
+  previousDetections?: RepositoryDetectionState;
 }
 
 /**
@@ -430,6 +441,8 @@ export interface GraphBuildState {
   repositories: RepositoryBuild[];
   /** 모든 저장소의 레코드. 저장소 이름 순서 */
   records: CurrentSymbolRecord[];
+  /** 저장소 이름 → 탐지 결과(정렬됨). 탐지 단계가 채우고, 뒤 단계는 읽기만 한다 */
+  detections: Map<string, Detection[]>;
   artifacts: Map<string, unknown>;
 }
 
@@ -585,6 +598,7 @@ export interface PresetContext {
   /**
    * 같은 저장소의 상수 이름(`ORDER_QUEUE`, `Queues.ORDER`)을 문자열 값으로 푼다. 못 풀면 undefined
    * 실행 사실은 문자열을 가리므로 상수 심볼의 원문에서 푼다
+   * 지금 보는 심볼의 파일 → 그 심볼이 가져온 파일 → 저장소 전체 순서로 찾고, 처음 찾은 범위에서 값이 하나로 정해질 때만 돌려준다
    */
   resolveConstant(identifier: string): string | undefined;
   /**
@@ -605,3 +619,66 @@ export interface DetectionPreset {
   readonly languages?: readonly string[];
   detect(symbol: ExtractedSymbol, context: PresetContext): Detection[];
 }
+
+/** 저장소 하나의 탐지 결과. detections.json 에 저장소마다 이 모양으로 남겨, 다음 번에 재사용한 저장소가 다시 쓴다 */
+export interface RepositoryDetectionState {
+  /** 파일 경로·줄·심볼·종류 순서 */
+  detections: Detection[];
+}
+
+/** detections.json */
+export interface DetectionsArtifact {
+  schemaVersion: 1;
+  /** 저장소 이름 → 그 저장소의 탐지 결과. 키는 이름 순서 */
+  repositories: Record<string, RepositoryDetectionState>;
+}
+
+export interface RunDetectionOptions {
+  logger?: Logger;
+  /** TypeScript·JavaScript 상수를 풀 때 쓰는 typescript 모듈. 기본은 `await import('typescript')` 이고, 없으면 그 상수는 풀지 않는다 */
+  loadTypeScript?: () => Promise<TypeScriptModule>;
+}
+
+export interface ResolvePresetsOptions {
+  /** presetModules 의 모듈을 읽는 함수(절대 경로를 받는다). 기본은 동적 import */
+  importModule?: (path: string) => Promise<unknown>;
+  /** 설정 detectors 규칙을 프리셋 하나로 만든다. 설정에 detectors 가 있으면 있어야 한다 */
+  rules?: (rules: readonly GraphDetectorRule[]) => DetectionPreset;
+}
+
+// ── 가져오기와 상수 풀기 ──
+
+/** IMPORTS 관계 하나를 푼 것. 이 파일에서 쓰는 이름(local)이 어느 모듈의 어느 이름인지 */
+export interface ImportedBinding {
+  local: string;
+  /** 모듈 안의 이름. 모듈 전체를 이름 하나로 받았으면(`* as points`) `*`, 기본 내보내기면 `default` */
+  imported: string;
+  specifier: string;
+}
+
+/** 상수를 찾기 시작하는 자리. 지금 보는 심볼의 파일과 관계(IMPORTS)로 찾을 범위를 좁힌다 */
+export interface ConstantOrigin {
+  filePath: string;
+  relations: readonly CodeSymbolRelation[];
+}
+
+/** 같은 저장소의 상수 이름을 문자열 값으로 푼다 */
+export interface ConstantResolver {
+  resolve(identifier: string, origin?: ConstantOrigin): string | undefined;
+}
+
+/**
+ * 상수 원문을 읽어 만든 값 나무. 언어와 상관없이 같은 꼴로 값을 따라간다
+ * - text: 문자열 값
+ * - reference: 다른 상수 이름. 따라가서 푼다
+ * - join: 템플릿이나 문자열 더하기. 조각이 모두 풀릴 때만 값이 된다
+ * - members: 객체 리터럴이나 열거형의 멤버
+ */
+export type ConstantNode =
+  | { kind: 'text'; value: string }
+  | { kind: 'reference'; name: string }
+  | { kind: 'join'; parts: ConstantNode[] }
+  | { kind: 'members'; members: ReadonlyMap<string, ConstantNode> };
+
+/** 탐지 필드의 꼴. 탐지 결과를 받을 때 있어야 하는 필드를 검사하는 데 쓴다 */
+export type DetectionFieldShape = 'string' | 'boolean' | 'array';

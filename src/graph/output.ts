@@ -216,6 +216,22 @@ export function assertNoSymbolCollapse(
   }
 }
 
+/** 결과 폴더의 JSON 결과 파일 하나. 없으면 undefined, JSON 이 아니면 throw 한다 */
+export async function readGraphArtifact(
+  output: string,
+  name: string,
+): Promise<unknown> {
+  const text = await readOptionalFile(join(output, name));
+  if (text === undefined) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error(`${name}: not valid JSON`);
+  }
+}
+
 /** 키를 정렬한 JSON. 지문을 만들 때 키 순서가 달라도 같은 값이 되게 한다 */
 export function canonicalJson(value: unknown): string {
   return JSON.stringify(sortKeys(value));

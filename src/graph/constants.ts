@@ -1,6 +1,11 @@
 import type { ExecutionFactKind } from '../extensions/code-knowledge.js';
 import type { Logger } from '../ports.js';
-import type { FileSkipCounts, GraphDetectorKind } from './types.js';
+import type {
+  DetectionFieldShape,
+  DetectionKind,
+  FileSkipCounts,
+  GraphDetectorKind,
+} from './types.js';
 
 // ── 설정 ──
 
@@ -268,6 +273,98 @@ export const FORBIDDEN_RECORD_KEYS: readonly string[] = [
 export const GRAPH_SYMBOL_COLLAPSE_RATIO = 0.5;
 /** 실패 메시지를 남길 때 자르는 길이 */
 export const GRAPH_FAILURE_MESSAGE_MAX_CHARS = 500;
+
+// ── 탐지 ──
+
+/** 탐지 결과 파일. 저장소마다 탐지 결과를 남겨, 커밋과 입력이 같은 저장소는 다음 번에 다시 추출하지 않고 이 결과를 쓴다 */
+export const GRAPH_DETECTIONS_FILE = 'detections.json';
+/** 탐지기가 낼 수 있는 결과 종류. 이 밖의 종류는 탐지기 잘못으로 보고 멈춘다 */
+export const DETECTION_KINDS: readonly DetectionKind[] = [
+  'http-route',
+  'http-call',
+  'graphql-resolver',
+  'graphql-document',
+  'graphql-client-call',
+  'queue-publish',
+  'queue-consume',
+  'event-publish',
+  'event-handle',
+  'schedule',
+  'entity-declaration',
+  'entity-read',
+  'entity-write',
+  'cache-read',
+  'cache-write',
+  'field-write',
+];
+/** 탐지 결과 앞자리 필드. 결과 파일에는 이 순서 뒤에 나머지 필드를 이름 순으로 적는다 */
+export const DETECTION_BASE_KEYS: readonly string[] = [
+  'kind',
+  'repository',
+  'filePath',
+  'symbol',
+  'line',
+  'detector',
+  'confidence',
+  'evidence',
+];
+/**
+ * 탐지 종류마다 있어야 하는 필드와 그 꼴. 프리셋이 빠뜨리면 어느 프리셋인지 밝혀 멈춘다
+ * 토폴로지와 연결 단계가 이 필드를 믿고 읽으므로, 잘못된 탐지가 조용히 엉뚱한 노드를 만들지 않게 한다
+ */
+export const DETECTION_REQUIRED_FIELDS: Readonly<
+  Record<DetectionKind, Readonly<Record<string, DetectionFieldShape>>>
+> = {
+  'http-route': { method: 'string', path: 'string' },
+  'http-call': {
+    method: 'string',
+    baseIdentifiers: 'array',
+    dynamic: 'boolean',
+  },
+  'graphql-resolver': { operationType: 'string', field: 'string' },
+  'graphql-document': {
+    operationType: 'string',
+    operationName: 'string',
+    rootFields: 'array',
+  },
+  'graphql-client-call': { operationName: 'string' },
+  'queue-publish': { name: 'string', dynamic: 'boolean' },
+  'queue-consume': { name: 'string', dynamic: 'boolean' },
+  'event-publish': { name: 'string', dynamic: 'boolean' },
+  'event-handle': { name: 'string', dynamic: 'boolean' },
+  schedule: { expression: 'string' },
+  'entity-declaration': {
+    table: 'string',
+    className: 'string',
+    columns: 'array',
+    relations: 'array',
+  },
+  'entity-read': { target: 'string', targetType: 'string' },
+  'entity-write': { target: 'string', targetType: 'string' },
+  'cache-read': { target: 'string', targetType: 'string' },
+  'cache-write': { target: 'string', targetType: 'string' },
+  'field-write': {
+    field: 'string',
+    writeKind: 'string',
+    valueSummary: 'string',
+  },
+};
+/** 비밀값 가리기를 하지 않는 탐지 필드. 저장소·경로·심볼·탐지기 이름은 이미 결과 파일에 그대로 남는 값이다 */
+export const DETECTION_IDENTITY_KEYS: readonly string[] = [
+  'kind',
+  'repository',
+  'filePath',
+  'symbol',
+  'detector',
+];
+/** 상수가 다른 상수를 가리킬 때 따라가는 깊이. 서로 가리키는 상수에서 멈추려고 둔다 */
+export const CONSTANT_REFERENCE_DEPTH = 4;
+/** 상수 값을 원문에서 읽는 심볼 종류 */
+export const CONSTANT_SYMBOL_KINDS: readonly string[] = ['constant', 'enum'];
+/** TypeScript 클래스 필드 원문을 구문 트리로 읽으려고 감싸는 껍데기 */
+export const CLASS_MEMBER_WRAPPER = { open: 'class Owner {\n', close: '\n}' };
+/** 별칭 경로의 흔한 앞머리(`@/`, `~/`, `#/`). 떼고 저장소 안 경로로 맞춰 본다 */
+export const MODULE_ALIAS_PREFIXES: readonly string[] = ['@/', '~/', '#/'];
 
 // ── git ──
 

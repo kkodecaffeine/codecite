@@ -1,11 +1,11 @@
-// 그래프 만들기 파이프라인. 지금은 스냅샷 → 파일 고르기 → 추출 → 레코드 → 결과 파일까지 한다
-// 탐지·저장소 안 토폴로지·저장소 간 연결·엔티티·필드 쓰기·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
+// 그래프 만들기 파이프라인. 지금은 스냅샷 → 파일 고르기 → 추출 → 레코드 → 탐지 → 결과 파일까지 한다
+// 저장소 안 토폴로지·저장소 간 연결·엔티티·필드 쓰기·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
 import { readFile, realpath } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
-import { relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import type { Logger } from '../ports.js';
 import {
+  GRAPH_DETECTIONS_FILE,
   GRAPH_FAILURE_MESSAGE_MAX_CHARS,
   GRAPH_FLOOR_EXCLUDES,
   GRAPH_OUTPUT_FORMAT,
@@ -14,19 +14,28 @@ import {
   SILENT_LOGGER,
 } from './constants.js';
 import {
+  detectionsArtifact,
+  parseDetectionsArtifact,
+  runDetection,
+} from './detect.js';
+import { compareSymbols } from './extractors/normalize.js';
+import {
   compareText,
   matchingExtension,
+  portablePath,
   readSourceFiles,
   selectSourceFiles,
 } from './files.js';
 import {
   assertNoSymbolCollapse,
   fingerprint,
+  readGraphArtifact,
   readGraphManifest,
   readRepositorySymbols,
   symbolsFilePath,
   writeGraphOutputs,
 } from './output.js';
+import { resolvePresets } from './presets/registry.js';
 import { buildRepositoryRecords, parseGroupPattern } from './records.js';
 import { scrubMessage } from './redaction.js';
 import {
@@ -37,6 +46,7 @@ import {
 import type {
   BuildCodeGraphOptions,
   CodeGraphBuildResult,
+  DetectionPreset,
   ExtractedSymbol,
   ExtractionFailure,
   GraphBuildState,
@@ -45,6 +55,7 @@ import type {
   GraphRepositoryConfig,
   RepositoryBuild,
   RepositoryBuildContext,
+  RepositoryDetectionState,
   SourceFile,
   SymbolExtractor,
 } from './types.js';
@@ -54,6 +65,7 @@ import type {
  * - 저장소마다 원격 기본 브랜치 커밋을 정하고, 지난 결과와 커밋·입력 지문이 같으면 꺼내지 않고 재사용한다
  * - 바뀐 저장소만 임시 폴더에 꺼내, 고른 파일을 확장자로 추출기에 나눠 넘긴다. 추출기가 없으면 빈 결과를 쓴다
  * - 심볼 수가 지난번의 절반 아래로 줄면 아무것도 쓰지 않고 멈춘다
+ * - 켠 프리셋으로 저장소마다 계약을 탐지해 detections.json 에 남긴다. 재사용한 저장소는 지난 탐지 결과를 그대로 쓴다
  * 임시 폴더는 성공·실패와 상관없이 지운다
  */
 export async function buildCodeGraph(
@@ -68,8 +80,15 @@ export async function buildCodeGraph(
     ...(await loadExtractorModules(config)),
   ];
   const routes = extractorRoutes(extractors);
+  const presets = await resolvePresets(config, options.presets ?? [], {
+    rules: options.rulesPreset,
+  });
   const toolVersion = await readToolVersion();
   const previous = await readPreviousManifest(config.output, logger);
+  const previousDetections = await readPreviousDetections(
+    config.output,
+    logger,
+  );
   const localRoots = await localPathRoots(config);
   const workspace = await SnapshotWorkspace.create();
   localRoots.push(workspace.root);
@@ -91,6 +110,8 @@ export async function buildCodeGraph(
         localRoots,
         logger,
         acceptSymbolDrop: options.acceptSymbolDrop ?? [],
+        presets,
+        previousDetections: previousDetections.get(repository.name),
       });
       logger.info('graph repository built', {
         repository: repository.name,
@@ -107,11 +128,16 @@ export async function buildCodeGraph(
       config,
       repositories,
       records: repositories.flatMap((build) => build.records),
+      detections: new Map(),
       artifacts: new Map(),
     };
 
-    // ── 탐지와 저장소 안 토폴로지가 여기에 단계를 더한다 ──
-    // state.records(와 꺼낸 저장소는 snapshot.root)를 읽어 계약을 찾고, state.artifacts 에 topology.json 을 넣는다
+    // ── 탐지: 저장소 이름 → 정렬한 탐지 결과를 state.detections 에 둔다 ──
+    state.detections = await runDetection(state, presets, { logger });
+    state.artifacts.set(GRAPH_DETECTIONS_FILE, detectionsArtifact(state));
+
+    // ── 저장소 안 토폴로지가 여기에 단계를 더한다 ──
+    // state.records 와 state.detections 를 읽어 state.artifacts 에 topology.json 을 넣는다
     // ── 저장소 간 연결·엔티티·필드 쓰기·보고서가 그 뒤에 단계를 더한다 ──
     // cross-repository.json, entities.json, field-writers.json, report.json 을 state.artifacts 에 넣는다
 
@@ -158,10 +184,13 @@ async function buildRepository(
     repository,
     config,
     context.extractors,
+    context.presets,
     context.toolVersion,
   );
+  // 재사용한 저장소는 추출 심볼이 없어 다시 탐지할 수 없다. 지난 탐지 결과가 없으면 다시 만든다
   if (
     previous &&
+    context.previousDetections &&
     previous.commitSha === head.commitSha &&
     previous.inputFingerprint === inputFingerprint
   ) {
@@ -185,6 +214,7 @@ async function buildRepository(
         },
         manifest: { ...previous, branch: head.branch },
         records,
+        previousDetections: context.previousDetections,
       };
     }
   }
@@ -307,7 +337,8 @@ async function runExtractors(
     symbols.push(...result.symbols);
     failures.push(...result.failures);
   }
-  return { symbols, failures };
+  // 탐지기는 파일 경로·시작 줄 순서를 믿고 읽는다. 추출기 여럿의 결과를 이어 붙인 뒤 다시 정렬한다
+  return { symbols: symbols.sort(compareSymbols), failures };
 }
 
 /** 확장자(소문자) → 추출기. 이름이 겹치거나 같은 확장자를 둘이 맡으면 어느 쪽을 쓸지 모르므로 멈춘다 */
@@ -390,12 +421,15 @@ function isSymbolExtractor(value: unknown): value is SymbolExtractor {
 
 /**
  * 저장소 결과를 만든 입력의 지문. 커밋이 같아도 이 값이 다르면 다시 만든다
- * 도구 판·결과 형식·파일 고르기 규칙·이 저장소에 걸린 정책 묶음·추출기 이름과 확장자를 넣는다
+ * 도구 판·결과 형식·파일 고르기 규칙·이 저장소에 걸린 정책 묶음·추출기 이름과 확장자,
+ * 그리고 탐지 입력(설정 presets·detectors·presetModules 와 켠 프리셋의 이름·언어)을 넣는다
+ * 탐지 결과는 재사용하므로, 프리셋이 바뀌면 다시 추출해 다시 탐지해야 한다
  */
 function repositoryFingerprint(
   repository: GraphRepositoryConfig,
   config: GraphConfig,
   extractors: readonly SymbolExtractor[],
+  presets: readonly DetectionPreset[],
   toolVersion: string,
 ): string {
   const groups = Object.entries(config.groups)
@@ -421,6 +455,21 @@ function repositoryFingerprint(
         extensions: [...extractor.extensions].sort(compareText),
       }))
       .sort((left, right) => compareText(left.name, right.name)),
+    presets: [...new Set(config.presets)].sort(compareText),
+    detectors: config.detectors,
+    presetModules: config.presetModules.map((path) =>
+      portablePath(config.cwd, path),
+    ),
+    detection: presets
+      .map((preset) => ({
+        name: preset.name,
+        languages: [...(preset.languages ?? [])].sort(compareText),
+      }))
+      .sort(
+        (left, right) =>
+          compareText(left.name, right.name) ||
+          compareText(left.languages.join(','), right.languages.join(',')),
+      ),
   });
 }
 
@@ -497,6 +546,22 @@ async function readPreviousManifest(
   }
 }
 
+/** 지난 detections.json. 없거나 깨졌으면 비어 있는 것으로 본다(이때는 어느 저장소도 재사용하지 않는다) */
+async function readPreviousDetections(
+  output: string,
+  logger: Logger,
+): Promise<Map<string, RepositoryDetectionState>> {
+  try {
+    const value = await readGraphArtifact(output, GRAPH_DETECTIONS_FILE);
+    return value === undefined ? new Map() : parseDetectionsArtifact(value);
+  } catch (error) {
+    logger.warn('graph previous detections unreadable; rebuilding', {
+      error: (error as Error).message,
+    });
+    return new Map();
+  }
+}
+
 /** 실패 메시지와 경로에서 이 컴퓨터의 경로를 지운다 */
 function cleanFailure(
   failure: ExtractionFailure,
@@ -525,11 +590,6 @@ async function localPathRoots(config: GraphConfig): Promise<string[]> {
     roots.map((root) => realpath(root).catch(() => root)),
   );
   return [...roots, ...resolved];
-}
-
-/** 설정 폴더 기준 상대 경로(`/` 구분). 결과에 이 컴퓨터의 절대 경로를 남기지 않으려고 쓴다 */
-function portablePath(base: string, path: string): string {
-  return relative(base, path).split(sep).join('/') || '.';
 }
 
 async function readToolVersion(): Promise<string> {
