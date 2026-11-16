@@ -86,6 +86,13 @@ export interface RegistrationFramework {
     site: CodeSite,
     context: PresetContext,
   ): RouteRegistration | undefined;
+  /** 라우터 마운트 규칙 */
+  mount: MountFramework;
+  /** 등록한 받는 쪽의 마운트 열쇠. 모르면 undefined(접두어 없이 낸다) */
+  mountKey(
+    symbol: ExtractedSymbol,
+    binding: ReceiverBinding | undefined,
+  ): string | undefined;
 }
 
 /** 라우트를 달 심볼과 줄, 근거 */
@@ -110,4 +117,101 @@ export interface PythonRouteFramework {
   /** 접두어를 받는 만드는 함수와 그 키워드 */
   prefixFactories: readonly string[];
   prefixKeyword: string;
+  /** 라우터 마운트 규칙 */
+  mount: MountFramework;
+}
+
+/**
+ * 라우터 마운트 하나(`app.use('/api', ordersRouter)`). 붙는 쪽(child)이 붙이는 쪽(parent) 아래 prefix 로 들어간다
+ * 열쇠는 라우터를 만든 자리(만드는 호출이 있는 심볼과 줄)나 플러그인 함수 심볼이다
+ */
+export interface MountEdge {
+  /** 붙이는 쪽 열쇠. 모르면(매개변수로 받은 앱 등) 맨 위로 본다 */
+  parent?: string;
+  child: string;
+  /** 마운트 자리에 적은 접두어. 적지 않았으면 비운다(Flask 는 그때 Blueprint 자기 접두어를 쓴다) */
+  prefix?: string;
+  /** 접두어를 정적으로 못 읽었으면 그 원문. 이 마운트로는 접두어를 붙이지 않고 근거에 남긴다 */
+  unresolved?: string;
+  /** 마운트 자리와 붙는 라우터가 다른 파일인지 */
+  crossFile: boolean;
+  /** 근거에 적는 자리(`app.use at src/app.ts:9`) */
+  site: string;
+}
+
+/** 저장소 하나의 마운트 간선. 붙는 쪽 열쇠 → 간선, 열쇠 → 라우터 자기 접두어 */
+export interface MountGraph {
+  incoming: ReadonlyMap<string, readonly MountEdge[]>;
+  owns: ReadonlyMap<string, string>;
+}
+
+/** 마운트 간선을 모으는 쪽 */
+export interface MountGraphBuilder {
+  addEdge(edge: MountEdge): void;
+  /** 라우터 자기 접두어(`APIRouter(prefix=…)`, `Blueprint(url_prefix=…)`) */
+  setOwn(key: string, prefix: string): void;
+}
+
+/** 라우터 마운트 규칙 하나(프레임워크마다) */
+export interface MountFramework {
+  name: string;
+  languages: readonly string[];
+  /** 호출 자리 하나가 마운트면 간선을 더한다 */
+  read(
+    symbol: ExtractedSymbol,
+    site: CodeSite,
+    context: PresetContext,
+    builder: MountGraphBuilder,
+  ): void;
+  /** 마운트 자리 접두어와 붙는 라우터 자기 접두어를 합친다 */
+  combine(edgePrefix: string | undefined, own: string): string;
+}
+
+/** 맨 위 앱에서 라우터까지 이어 붙인 접두어 하나 */
+export interface MountedPrefix {
+  /** 정규화한 접두어(`/api/v1`). 접두어가 없으면 `/` */
+  prefix: string;
+  /** 다른 파일의 마운트를 거쳤는지 */
+  crossFile: boolean;
+  /** 거친 마운트 자리(위에서 아래 순서) */
+  via: string[];
+}
+
+/** 라우터 하나의 접두어 목록과, 못 읽은 마운트·순환 같은 알림 */
+export interface MountResolution {
+  prefixes: MountedPrefix[];
+  notes: string[];
+}
+
+/** 라우트 경로에 접두어를 붙인 결과 묶음. 같은 신뢰도·근거끼리 탐지 한 번으로 낸다 */
+export interface PrefixedRoutes {
+  paths: string[];
+  confidence: number;
+  evidence: string;
+}
+
+/** NestJS 앱 전역 접두어(`app.setGlobalPrefix('api', { exclude })`). 저장소 안에서 하나로 정해질 때만 prefix 가 있다 */
+export interface NestGlobalPrefix {
+  prefix?: string;
+  /** 접두어를 적은 파일과 자리 */
+  filePath?: string;
+  site?: string;
+  /** 전역 접두어를 붙이지 않는 라우트(정규화 경로, 메서드가 없으면 모든 메서드) */
+  exclude: Array<{ path: string; method?: string }>;
+  /** 못 읽었거나 값이 여럿이라 붙이지 않은 까닭 */
+  notes: string[];
+}
+
+/** RouterModule 이 모듈에 준 경로 하나 */
+export interface NestModulePrefix {
+  /** 정규화한 경로(`/admin/orders`) */
+  prefix: string;
+  /** 경로 목록 상수가 있는 파일 */
+  filePath: string;
+}
+
+/** 저장소의 NestJS 경로 앞머리: 전역 접두어와 컨트롤러 클래스 이름 → RouterModule 경로 */
+export interface NestPrefixes {
+  global: NestGlobalPrefix;
+  controllers: ReadonlyMap<string, readonly NestModulePrefix[]>;
 }

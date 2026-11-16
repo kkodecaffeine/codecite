@@ -50,7 +50,7 @@ async function routes(
 }
 
 describe('FASTAPI_PRESET', () => {
-  it('APIRouter 접두어를 붙이고, 가져온 라우터와 FastAPI 앱의 데코레이터 라우트를 읽는다', async () => {
+  it('APIRouter 접두어 앞에 다른 파일 include_router 접두어를 붙이고, 가져온 라우터와 FastAPI 앱의 데코레이터 라우트를 읽는다', async () => {
     const found = await routes({
       'app/routers/orders.py': `from fastapi import APIRouter
 
@@ -102,25 +102,25 @@ def health():
       ]),
     ).toEqual([
       ['app/main.py', 'health', 'GET', '/health', 0.99],
-      ['app/routers/orders.py', 'read_order', 'GET', '/orders/:param', 0.99],
+      ['app/routers/orders.py', 'read_order', 'GET', '/v1/orders/:param', 0.97],
       [
         'app/routers/orders.py',
         'request_refund',
         'POST',
-        '/orders/:param/refund',
-        0.99,
+        '/v1/orders/:param/refund',
+        0.97,
       ],
       [
         'app/routers/orders.py',
         'request_refund',
         'PUT',
-        '/orders/:param/refund',
-        0.99,
+        '/v1/orders/:param/refund',
+        0.97,
       ],
       ['app/routers/points.py', 'add_points', 'POST', '/points/:param', 0.99],
     ]);
     expect(found[1]?.evidence).toBe(
-      "router.get at line 7; router from APIRouter in app/routers/orders.py with prefix '/orders'",
+      "router.get at line 7; router from APIRouter in app/routers/orders.py with prefix '/orders'; mounted at '/v1/orders' via app.include_router at app/main.py:5",
     );
   });
 

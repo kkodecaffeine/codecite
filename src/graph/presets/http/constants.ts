@@ -212,3 +212,30 @@ export const HANDLER_SYMBOL_KINDS: readonly string[] = ['function', 'method'];
 /** 기본 내보내기·모듈 전체 가져오기의 원래 이름 */
 export const DEFAULT_EXPORT_NAME = 'default';
 export const WHOLE_MODULE_NAME = '*';
+
+// ── 라우터 마운트 ──
+
+/** 다른 파일의 마운트·전역 접두어를 거쳐 붙인 경로의 신뢰도에서 빼는 값 */
+export const MOUNT_CROSS_FILE_PENALTY = 0.02;
+/** 라우터 하나에 붙는 접두어 수 한도. 마운트가 서로 얽혀 경우가 크게 늘어나는 것을 막는다 */
+export const MAX_MOUNT_PREFIXES = 64;
+/** Express `app.use(prefix, router)` */
+export const EXPRESS_MOUNT = 'use';
+/** Fastify `fastify.register(plugin, { prefix })` */
+export const FASTIFY_MOUNT = 'register';
+export const FASTIFY_PREFIX_OPTION = 'prefix';
+/** FastAPI `app.include_router(router, prefix=…)` */
+export const FASTAPI_MOUNT = 'include_router';
+export const FASTAPI_ROUTER_KEYWORD = 'router';
+/** Flask `app.register_blueprint(bp, url_prefix=…)` */
+export const FLASK_MOUNT = 'register_blueprint';
+export const FLASK_BLUEPRINT_KEYWORD = 'blueprint';
+/** NestJS 앱 전역 접두어 `app.setGlobalPrefix('api', { exclude })` */
+export const NEST_GLOBAL_PREFIX = 'setGlobalPrefix';
+export const NEST_GLOBAL_PREFIX_EXCLUDE = 'exclude';
+/** NestJS 모듈 데코레이터와 RouterModule 등록 */
+export const NEST_MODULE_DECORATOR = 'Module';
+export const NEST_ROUTER_MODULE_REGISTER =
+  /^RouterModule\.register\(\s*([\w$.]+)\s*\)$/;
+/** RouterModule 경로 나무(children)를 따라 내려가는 깊이 한도 */
+export const NEST_ROUTE_TREE_DEPTH = 8;

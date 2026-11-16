@@ -1,5 +1,6 @@
 // NestJS 라우트 프리셋. 메서드의 `@Get(':id')` 경로 앞에 같은 파일 컨트롤러 클래스의 `@Controller('orders')` 기본 경로를 붙인다
 // 매개변수 데코레이터(`@Query('page')`, `@Param('id')`)는 메서드 데코레이터가 아니라서 DECORATED_BY 관계로 걸러 낸다
+// 그 앞에 RouterModule 모듈 경로와 앱 전역 접두어(`setGlobalPrefix`)를 붙인다(nest-prefixes.ts). 다른 파일에서 온 앞머리는 신뢰도를 조금 낮춘다
 import type {
   CodeSiteArgument,
   DetectionPreset,
@@ -10,10 +11,12 @@ import { staticTexts } from './arguments.js';
 import {
   DECORATOR_ROUTE_CONFIDENCE,
   DECORATOR_ROUTE_PARTIAL_CONFIDENCE,
+  MOUNT_CROSS_FILE_PENALTY,
   NEST_CONTROLLER_DECORATOR,
   NEST_ROUTE_DECORATORS,
   SCRIPT_LANGUAGES,
 } from './constants.js';
+import { isExcluded, nestPrefixes } from './nest-prefixes.js';
 import { joinHttpPaths } from './paths.js';
 import { fileSymbol, isOwnDecorator } from './repository.js';
 import { routeDetections } from './routes.js';
@@ -34,11 +37,12 @@ export const NESTJS_HTTP_PRESET: DetectionPreset = {
     if (routes.length === 0) {
       return [];
     }
-    const controller = controllerPaths(
-      symbol,
-      symbol.symbol.slice(0, dot),
-      context,
-    );
+    const className = symbol.symbol.slice(0, dot);
+    const controller = controllerPaths(symbol, className, context);
+    const prefixes = nestPrefixes(context);
+    const modules = prefixes.controllers.get(className) ?? [
+      { prefix: '/', filePath: symbol.filePath },
+    ];
     return routes.flatMap((site) => {
       const method = NEST_ROUTE_DECORATORS[site.name] ?? '';
       const children = routePaths(site.args[0], context);
@@ -52,16 +56,46 @@ export const NESTJS_HTTP_PRESET: DetectionPreset = {
       const evidence = controller
         ? `@${site.name}(${quoted(children)}) under @${NEST_CONTROLLER_DECORATOR}(${quoted(controller.paths)})`
         : `@${site.name}(${quoted(children)}); controller base path not found`;
-      return routeDetections({
-        target: { symbol, line: site.line, evidence },
-        detector: NESTJS_HTTP_PRESET.name,
-        confidence: controller
-          ? DECORATOR_ROUTE_CONFIDENCE
-          : DECORATOR_ROUTE_PARTIAL_CONFIDENCE,
-        methods: [method],
-        paths,
-        context,
-      });
+      const confidence = controller
+        ? DECORATOR_ROUTE_CONFIDENCE
+        : DECORATOR_ROUTE_PARTIAL_CONFIDENCE;
+      const global = prefixes.global;
+      return modules.flatMap((module) =>
+        paths.flatMap((path) => {
+          const inner = joinHttpPaths(module.prefix, path);
+          const applied =
+            global.prefix !== undefined && !isExcluded(global, inner, method);
+          const notes: string[] = [];
+          let crossFile = false;
+          if (module.prefix !== '/') {
+            notes.push(
+              `RouterModule path '${module.prefix}' in ${module.filePath}`,
+            );
+            crossFile ||= module.filePath !== symbol.filePath;
+          }
+          if (applied) {
+            notes.push(`global prefix '${global.prefix}' from ${global.site}`);
+            crossFile ||= global.filePath !== symbol.filePath;
+          }
+          notes.push(...global.notes);
+          return routeDetections({
+            target: {
+              symbol,
+              line: site.line,
+              evidence: [evidence, ...notes].join('; '),
+            },
+            detector: NESTJS_HTTP_PRESET.name,
+            confidence: crossFile
+              ? Number((confidence - MOUNT_CROSS_FILE_PENALTY).toFixed(2))
+              : confidence,
+            methods: [method],
+            paths: [
+              applied ? joinHttpPaths(global.prefix ?? '', inner) : inner,
+            ],
+            context,
+          });
+        }),
+      );
     });
   },
 };

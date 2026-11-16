@@ -1,6 +1,11 @@
 // 자리 인자에서 주소·경로·메서드를 읽는다. 문자열, 템플릿 조각, 상수 이름만 보고 원문 글은 다시 읽지 않는다
 // 상수 이름은 PresetContext.resolveConstant 로 같은 저장소의 문자열 값으로 푼다. 환경 변수 읽기는 풀지 않고 기준 주소 식별자로 남긴다
-import type { CodeSite, CodeSiteArgument, PresetContext } from '../../types.js';
+import type {
+  CodeSite,
+  CodeSiteArgument,
+  ExtractedSymbol,
+  PresetContext,
+} from '../../types.js';
 import { HTTP_VERBS, SUBSTITUTION_MARK } from './constants.js';
 import {
   hostOf,
@@ -9,12 +14,15 @@ import {
   joinHttpPaths,
   normalizeHttpPath,
 } from './paths.js';
+import { constantArgument } from './repository.js';
 import type { UrlPiece, UrlReading } from './types.js';
 
 /** Python 키워드 인자를 모은 마지막 인자의 원문(`prefix=<literal>`) */
 const KEYWORD_BUNDLE_TEXT = /^\*{0,2}[A-Za-z_]\w*=/;
 /** 환경 변수 읽기 식별자 */
 const ENV_IDENTIFIER = /^(?:process\.env|import\.meta\.env|os\.environ)\./;
+/** 상수가 다른 상수를 가리킬 때 따라가는 깊이. 서로 가리키는 상수에서 멈춘다 */
+const MAX_CONSTANT_DEPTH = 4;
 const KNOWN_METHODS = new Set(
   [...HTTP_VERBS, 'trace'].map((verb) => verb.toUpperCase()),
 );
@@ -39,25 +47,41 @@ function isKeywordBundle(argument: CodeSiteArgument): boolean {
   );
 }
 
-/** 상수 이름을 문자열로 푼다. 환경 변수는 풀지 않는다 */
+/**
+ * 상수 이름을 문자열로 푼다. 환경 변수는 풀지 않는다
+ * origin 을 주면 그 심볼의 파일과 가져오기에서 상수 값을 먼저 찾는다. 지금 탐지하는 심볼이 아닌 다른 파일의 자리(라우터 마운트)를 읽을 때 쓴다
+ */
 export function resolveIdentifier(
   identifier: string,
   context: PresetContext,
+  origin?: ExtractedSymbol,
+  depth = 0,
 ): string | undefined {
-  return ENV_IDENTIFIER.test(identifier)
-    ? undefined
-    : context.resolveConstant(identifier);
+  if (ENV_IDENTIFIER.test(identifier)) {
+    return undefined;
+  }
+  if (origin && depth < MAX_CONSTANT_DEPTH) {
+    const found = constantArgument(origin, identifier, context);
+    const pieces = found
+      ? urlPieces(found.argument, context, found.owner, depth + 1)
+      : undefined;
+    if (pieces?.every((piece) => piece.kind === 'static')) {
+      return pieces.map((piece) => piece.text).join('');
+    }
+  }
+  return context.resolveConstant(identifier);
 }
 
 /** 인자를 정적 글로 읽는다. 문자열, 풀리는 상수, 치환 자리가 모두 풀리는 템플릿만 받는다 */
 export function staticText(
   argument: CodeSiteArgument | undefined,
   context: PresetContext,
+  origin?: ExtractedSymbol,
 ): string | undefined {
   if (!argument) {
     return undefined;
   }
-  const pieces = urlPieces(argument, context);
+  const pieces = urlPieces(argument, context, origin);
   return pieces.every((piece) => piece.kind === 'static')
     ? pieces.map((piece) => piece.text).join('')
     : undefined;
@@ -67,16 +91,17 @@ export function staticText(
 export function staticTexts(
   argument: CodeSiteArgument | undefined,
   context: PresetContext,
+  origin?: ExtractedSymbol,
 ): string[] {
   if (!argument) {
     return [];
   }
   if (argument.elements) {
     return argument.elements
-      .map((element) => staticText(element, context))
+      .map((element) => staticText(element, context, origin))
       .filter((value): value is string => value !== undefined);
   }
-  const value = staticText(argument, context);
+  const value = staticText(argument, context, origin);
   return value === undefined ? [] : [value];
 }
 
@@ -119,6 +144,8 @@ export function readMethods(
 export function urlPieces(
   argument: CodeSiteArgument,
   context: PresetContext,
+  origin?: ExtractedSymbol,
+  depth = 0,
 ): UrlPiece[] {
   const pieces: UrlPiece[] = [];
   const push = (piece: UrlPiece): void => {
@@ -148,7 +175,12 @@ export function urlPieces(
       return;
     }
     if (current.identifier !== undefined) {
-      const value = resolveIdentifier(current.identifier, context);
+      const value = resolveIdentifier(
+        current.identifier,
+        context,
+        origin,
+        depth,
+      );
       push(
         value === undefined
           ? { kind: 'dynamic', identifier: current.identifier }

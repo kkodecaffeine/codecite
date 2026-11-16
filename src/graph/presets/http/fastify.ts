@@ -1,17 +1,32 @@
 // Fastify 라우터 등록 프리셋: `fastify.get('/points', handler)`, `fastify.get(path, { schema }, handler)`, `fastify.route({ method, url, handler })`
 // 플러그인이 받는 인스턴스 이름 `fastify` 는 관례로 받고, 다른 이름은 Fastify 로 만든 인스턴스이거나 Fastify 를 가져온 파일에서만 받는다
-// `register(plugin, { prefix })` 로 붙인 접두어는 아직 경로에 더하지 않는다
-import type { CodeSite, DetectionPreset, PresetContext } from '../../types.js';
+// `register(plugin, { prefix })` 접두어는 플러그인 함수 안에서 등록한 라우트에 붙인다. 플러그인 안의 register 도 이어 붙인다(mounts.ts)
+import type {
+  CodeSite,
+  DetectionPreset,
+  ExtractedSymbol,
+  PresetContext,
+} from '../../types.js';
 import { readMethods, staticTexts } from './arguments.js';
 import {
   ANY_HTTP_METHOD,
   FASTIFY_FACTORIES,
   FASTIFY_INSTANCE_NAME,
   FASTIFY_MODULES,
+  FASTIFY_MOUNT,
+  FASTIFY_PREFIX_OPTION,
+  HANDLER_SYMBOL_KINDS,
   FASTIFY_ROUTE_OBJECT,
   FASTIFY_ROUTE_VERBS,
   SCRIPT_LANGUAGES,
 } from './constants.js';
+import {
+  addMountEdges,
+  functionKey,
+  mountPrefixes,
+  routerKey,
+} from './mounts.js';
+import { bindReceiver, namedSymbols } from './repository.js';
 import {
   handlerArgument,
   registrationRoutes,
@@ -19,12 +34,65 @@ import {
 } from './routes.js';
 import type {
   HandlerArgument,
+  MountFramework,
+  ReceiverBinding,
   RegistrationFramework,
   RouteRegistration,
 } from './types.js';
 
+/** 등록한 받는 쪽의 열쇠. Fastify() 로 만든 앱이면 그 자리, 아니면 플러그인 함수(매개변수로 받은 인스턴스) */
+function fastifyKey(
+  symbol: ExtractedSymbol,
+  binding: ReceiverBinding | undefined,
+): string | undefined {
+  return (
+    routerKey(binding) ??
+    (HANDLER_SYMBOL_KINDS.includes(symbol.kind)
+      ? functionKey(symbol)
+      : undefined)
+  );
+}
+
+/** Fastify 마운트: `받는쪽.register(플러그인, { prefix })`. 플러그인은 같은 파일이나 가져온 파일의 함수 하나 */
+const FASTIFY_MOUNTS: MountFramework = {
+  name: 'fastify',
+  languages: SCRIPT_LANGUAGES,
+  combine: (edgePrefix) => edgePrefix ?? '',
+  read(symbol, site, context, builder) {
+    const call = splitMemberCall(site.name);
+    const plugin = site.args[0]?.identifier;
+    if (!call || call.member !== FASTIFY_MOUNT || plugin === undefined) {
+      return;
+    }
+    const functions = namedSymbols(symbol, plugin, context).symbols.filter(
+      (candidate) => HANDLER_SYMBOL_KINDS.includes(candidate.kind),
+    );
+    const target = functions.length === 1 ? functions[0] : undefined;
+    if (!target) {
+      return;
+    }
+    const option = site.args[1]?.properties?.[FASTIFY_PREFIX_OPTION];
+    const read = option
+      ? mountPrefixes(symbol, option, context)
+      : { prefixes: [undefined] };
+    addMountEdges(builder, {
+      parent: fastifyKey(
+        symbol,
+        bindReceiver(symbol, call.receiver, site, FASTIFY_FACTORIES, context),
+      ),
+      child: functionKey(target),
+      childFile: target.filePath,
+      symbol,
+      site,
+      ...read,
+    });
+  },
+};
+
 const FASTIFY: RegistrationFramework = {
   name: 'fastify',
+  mount: FASTIFY_MOUNTS,
+  mountKey: fastifyKey,
   modules: FASTIFY_MODULES,
   factories: FASTIFY_FACTORIES,
   conventionalReceivers: [FASTIFY_INSTANCE_NAME],

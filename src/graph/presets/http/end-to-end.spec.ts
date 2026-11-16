@@ -79,11 +79,14 @@ afterEach(async () => {
   }
 });
 
-describe('HTTP·GraphQL 프리셋을 그래프 만들기에 넣으면', () => {
-  it('두 저장소의 라우트·호출·리졸버·연산이 탐지 결과와 토폴로지에 남는다', async () => {
-    root = await realpath(await mkdtemp(join(tmpdir(), 'codecite-presets-')));
-    const api = await remote(root, 'shop-api', {
-      'src/orders/order.controller.ts': `import { Controller, Get, Param } from '@nestjs/common';
+describe(
+  'HTTP·GraphQL 프리셋을 그래프 만들기에 넣으면',
+  { timeout: 60_000 },
+  () => {
+    it('두 저장소의 라우트·호출·리졸버·연산이 탐지 결과와 토폴로지에 남는다', async () => {
+      root = await realpath(await mkdtemp(join(tmpdir(), 'codecite-presets-')));
+      const api = await remote(root, 'shop-api', {
+        'src/orders/order.controller.ts': `import { Controller, Get, Param } from '@nestjs/common';
 
 @Controller('orders')
 export class OrderController {
@@ -93,7 +96,7 @@ export class OrderController {
   }
 }
 `,
-      'src/orders/order.resolver.ts': `import { Args, Query, Resolver } from '@nestjs/graphql';
+        'src/orders/order.resolver.ts': `import { Args, Query, Resolver } from '@nestjs/graphql';
 
 @Resolver(() => Order)
 export class OrderResolver {
@@ -103,11 +106,11 @@ export class OrderResolver {
   }
 }
 `,
-    });
-    const web = await remote(root, 'shop-web', {
-      'src/graphql/orders.graphql':
-        'query GetOrder($id: ID!) {\n  order(id: $id) { id }\n}\n',
-      'src/orders/order.page.tsx': `import { useGetOrderQuery } from '../generated/graphql';
+      });
+      const web = await remote(root, 'shop-web', {
+        'src/graphql/orders.graphql':
+          'query GetOrder($id: ID!) {\n  order(id: $id) { id }\n}\n',
+        'src/orders/order.page.tsx': `import { useGetOrderQuery } from '../generated/graphql';
 
 export function OrderPage({ id }) {
   const { data } = useGetOrderQuery({ variables: { id } });
@@ -118,68 +121,142 @@ export function loadOrder(id: string) {
   return fetch(\`/orders/\${id}\`);
 }
 `,
-    });
-    await mkdir(join(root, 'graph'));
-    const config = parseGraphConfig(
-      {
-        repositories: [
-          { name: 'shop-api', url: api },
-          { name: 'shop-web', url: web },
-        ],
-        presets: ['nestjs', 'fetch', 'graphql-codegen'],
-      },
-      join(root, 'graph'),
-    );
-
-    const result = await buildCodeGraph(config, {
-      presets: [...HTTP_PRESETS, ...GRAPHQL_PRESETS],
-      extractors: [...defaultSymbolExtractors(), graphqlDocumentExtractor()],
-    });
-    const detections = JSON.parse(
-      await readFile(join(result.output, 'detections.json'), 'utf8'),
-    ) as DetectionsArtifact;
-    const summary = (items: readonly Detection[]) =>
-      items.map((item) => {
-        switch (item.kind) {
-          case 'http-route':
-            return `${item.kind} ${item.symbol} ${item.method} ${item.path}`;
-          case 'http-call':
-            return `${item.kind} ${item.symbol} ${item.method} ${item.path ?? ''}`;
-          case 'graphql-resolver':
-            return `${item.kind} ${item.symbol} ${item.operationType} ${item.field}`;
-          case 'graphql-document':
-          case 'graphql-client-call':
-            return `${item.kind} ${item.symbol} ${item.operationName}`;
-          default:
-            return item.kind;
-        }
       });
+      await mkdir(join(root, 'graph'));
+      const config = parseGraphConfig(
+        {
+          repositories: [
+            { name: 'shop-api', url: api },
+            { name: 'shop-web', url: web },
+          ],
+          presets: ['nestjs', 'fetch', 'graphql-codegen'],
+        },
+        join(root, 'graph'),
+      );
 
-    expect(
-      summary(detections.repositories['shop-api']?.detections ?? []),
-    ).toEqual([
-      'http-route OrderController.find GET /orders/:param',
-      'graphql-resolver OrderResolver.findOrder query order',
-    ]);
-    expect(
-      summary(detections.repositories['shop-web']?.detections ?? []),
-    ).toEqual([
-      'graphql-document GetOrder GetOrder',
-      'graphql-client-call OrderPage GetOrder',
-      'http-call loadOrder GET /orders/:param',
-    ]);
+      const result = await buildCodeGraph(config, {
+        presets: [...HTTP_PRESETS, ...GRAPHQL_PRESETS],
+        extractors: [...defaultSymbolExtractors(), graphqlDocumentExtractor()],
+      });
+      const detections = JSON.parse(
+        await readFile(join(result.output, 'detections.json'), 'utf8'),
+      ) as DetectionsArtifact;
+      const summary = (items: readonly Detection[]) =>
+        items.map((item) => {
+          switch (item.kind) {
+            case 'http-route':
+              return `${item.kind} ${item.symbol} ${item.method} ${item.path}`;
+            case 'http-call':
+              return `${item.kind} ${item.symbol} ${item.method} ${item.path ?? ''}`;
+            case 'graphql-resolver':
+              return `${item.kind} ${item.symbol} ${item.operationType} ${item.field}`;
+            case 'graphql-document':
+            case 'graphql-client-call':
+              return `${item.kind} ${item.symbol} ${item.operationName}`;
+            default:
+              return item.kind;
+          }
+        });
 
-    const topology = JSON.parse(
-      await readFile(join(result.output, 'topology.json'), 'utf8'),
-    ) as SystemTopologyGraph;
-    const names = topology.nodes
-      .filter((node) => node.type === 'API' || node.type === 'GraphQLOperation')
-      .map((node) => `${node.type} ${node.name}`);
-    expect(names).toEqual(
-      expect.arrayContaining([
-        'API GET /orders/:param',
-        'GraphQLOperation Query:order',
-      ]),
-    );
-  });
-});
+      expect(
+        summary(detections.repositories['shop-api']?.detections ?? []),
+      ).toEqual([
+        'http-route OrderController.find GET /orders/:param',
+        'graphql-resolver OrderResolver.findOrder query order',
+      ]);
+      expect(
+        summary(detections.repositories['shop-web']?.detections ?? []),
+      ).toEqual([
+        'graphql-document GetOrder GetOrder',
+        'graphql-client-call OrderPage GetOrder',
+        'http-call loadOrder GET /orders/:param',
+      ]);
+
+      const topology = JSON.parse(
+        await readFile(join(result.output, 'topology.json'), 'utf8'),
+      ) as SystemTopologyGraph;
+      const names = topology.nodes
+        .filter(
+          (node) => node.type === 'API' || node.type === 'GraphQLOperation',
+        )
+        .map((node) => `${node.type} ${node.name}`);
+      expect(names).toEqual(
+        expect.arrayContaining([
+          'API GET /orders/:param',
+          'GraphQLOperation Query:order',
+        ]),
+      );
+    });
+
+    it('다른 파일에서 붙인 라우터 마운트 접두어와 전역 접두어가 토폴로지 경로에 들어간다', async () => {
+      root = await realpath(await mkdtemp(join(tmpdir(), 'codecite-mounts-')));
+      const api = await remote(root, 'shop-api', {
+        'src/app.ts': `import express from 'express';
+import { ordersRouter } from './orders/order.routes';
+
+const app = express();
+app.use('/api', ordersRouter);
+app.listen(3000);
+`,
+        'src/orders/order.routes.ts': `import { Router } from 'express';
+
+export const ordersRouter = Router();
+
+function listOrders(req, res) {
+  res.json([]);
+}
+
+ordersRouter.get('/orders', listOrders);
+`,
+      });
+      const worker = await remote(root, 'shop-worker', {
+        'src/main.ts': `import { NestFactory } from '@nestjs/core';
+import { AppModule } from './app.module';
+
+async function bootstrap() {
+  const app = await NestFactory.create(AppModule);
+  app.setGlobalPrefix('internal');
+  await app.listen(3000);
+}
+bootstrap();
+`,
+        'src/points/point.controller.ts': `import { Controller, Post } from '@nestjs/common';
+
+@Controller('points')
+export class PointController {
+  @Post('expire')
+  expire() {
+    return null;
+  }
+}
+`,
+      });
+      await mkdir(join(root, 'graph'));
+      const config = parseGraphConfig(
+        {
+          repositories: [
+            { name: 'shop-api', url: api },
+            { name: 'shop-worker', url: worker },
+          ],
+          presets: ['express', 'nestjs'],
+        },
+        join(root, 'graph'),
+      );
+
+      const result = await buildCodeGraph(config, {
+        presets: [...HTTP_PRESETS, ...GRAPHQL_PRESETS],
+        extractors: [...defaultSymbolExtractors(), graphqlDocumentExtractor()],
+      });
+      const topology = JSON.parse(
+        await readFile(join(result.output, 'topology.json'), 'utf8'),
+      ) as SystemTopologyGraph;
+
+      expect(
+        topology.nodes
+          .filter((node) => node.type === 'API')
+          .map((node) => node.name)
+          .sort(),
+      ).toEqual(['GET /api/orders', 'POST /internal/points/expire']);
+    });
+  },
+);

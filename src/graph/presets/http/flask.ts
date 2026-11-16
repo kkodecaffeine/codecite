@@ -1,5 +1,5 @@
 // Flask 라우트 프리셋: `@bp.route('/<int:refund_id>', methods=['POST'])`, `@app.get('/x')`, `app.add_url_rule('/x', view_func=handler)`
-// 받는 쪽이 `Blueprint(…, url_prefix='/refunds')` 면 접두어를 붙인다. `register_blueprint(bp, url_prefix=…)` 접두어는 아직 더하지 않는다
+// 받는 쪽이 `Blueprint(…, url_prefix='/refunds')` 면 접두어를 붙인다. `register_blueprint(bp, url_prefix=…)` 로 붙였으면 Flask 처럼 그 접두어가 Blueprint 자기 접두어를 대신한다
 import type {
   DetectionPreset,
   ExtractedSymbol,
@@ -14,7 +14,9 @@ import {
 } from './arguments.js';
 import {
   DEFAULT_HTTP_METHOD,
+  FLASK_BLUEPRINT_KEYWORD,
   FLASK_FACTORIES,
+  FLASK_MOUNT,
   FLASK_MODULES,
   FLASK_PREFIX_FACTORIES,
   FLASK_PREFIX_KEYWORD,
@@ -26,7 +28,11 @@ import {
   PYTHON_LANGUAGES,
   PYTHON_METHODS_KEYWORD,
 } from './constants.js';
-import { pythonDecoratorRoutes, pythonRoutes } from './python-routes.js';
+import {
+  pythonDecoratorRoutes,
+  pythonMounts,
+  pythonRoutes,
+} from './python-routes.js';
 import { callSites } from './repository.js';
 import { routeTarget, splitMemberCall } from './routes.js';
 import type { PythonRouteFramework } from './types.js';
@@ -34,7 +40,7 @@ import type { PythonRouteFramework } from './types.js';
 /** add_url_rule 의 view_func 위치 인자 순번(rule, endpoint, view_func) */
 const VIEW_FUNCTION_POSITION = 2;
 
-const FLASK: PythonRouteFramework = {
+const FLASK_RULES: Omit<PythonRouteFramework, 'mount'> = {
   name: 'flask',
   modules: FLASK_MODULES,
   factories: FLASK_FACTORIES,
@@ -44,6 +50,16 @@ const FLASK: PythonRouteFramework = {
   pathKeyword: FLASK_RULE_KEYWORD,
   prefixFactories: FLASK_PREFIX_FACTORIES,
   prefixKeyword: FLASK_PREFIX_KEYWORD,
+};
+
+const FLASK: PythonRouteFramework = {
+  ...FLASK_RULES,
+  mount: pythonMounts(FLASK_RULES, {
+    method: FLASK_MOUNT,
+    routerKeyword: FLASK_BLUEPRINT_KEYWORD,
+    prefixKeyword: FLASK_PREFIX_KEYWORD,
+    combine: (edgePrefix, own) => edgePrefix ?? own,
+  }),
 };
 
 export const FLASK_PRESET: DetectionPreset = {

@@ -19,8 +19,10 @@ import {
   fileSymbol,
   isWeakBinding,
 } from './repository.js';
+import { mountedPrefixes, prefixRoutes } from './mounts.js';
 import type {
   HandlerArgument,
+  ReceiverBinding,
   RegistrationFramework,
   RouteTarget,
 } from './types.js';
@@ -115,26 +117,40 @@ export function registrationRoutes(
     if (!registration || registration.paths.length === 0) {
       continue;
     }
-    const confidence = receiverConfidence(
+    const receiver = receiverConfidence(
       framework,
       symbol,
       registration.receiver,
       site,
       context,
     );
-    if (confidence === undefined) {
+    if (!receiver) {
       continue;
     }
-    detections.push(
-      ...routeDetections({
-        target: routeTarget(symbol, site, registration.handler, context),
-        detector: framework.name,
-        confidence,
-        methods: registration.methods,
-        paths: registration.paths,
-        context,
-      }),
+    const target = routeTarget(symbol, site, registration.handler, context);
+    const mounted = mountedPrefixes(
+      framework.mount,
+      framework.mountKey(symbol, receiver.binding),
+      '',
+      context,
     );
+    for (const group of prefixRoutes(
+      mounted,
+      registration.paths,
+      receiver.confidence,
+      target.evidence,
+    )) {
+      detections.push(
+        ...routeDetections({
+          target: { ...target, evidence: group.evidence },
+          detector: framework.name,
+          confidence: group.confidence,
+          methods: registration.methods,
+          paths: group.paths,
+          context,
+        }),
+      );
+    }
   }
   return detections;
 }
@@ -145,7 +161,7 @@ function receiverConfidence(
   receiver: string,
   site: CodeSite,
   context: PresetContext,
-): number | undefined {
+): { confidence: number; binding?: ReceiverBinding } | undefined {
   const binding = bindReceiver(
     symbol,
     receiver,
@@ -154,16 +170,19 @@ function receiverConfidence(
     context,
   );
   if (binding) {
-    return isWeakBinding(binding)
-      ? REGISTRATION_ROUTE_CONFIDENCE - WEAK_BINDING_PENALTY
-      : REGISTRATION_ROUTE_CONFIDENCE;
+    return {
+      confidence: isWeakBinding(binding)
+        ? REGISTRATION_ROUTE_CONFIDENCE - WEAK_BINDING_PENALTY
+        : REGISTRATION_ROUTE_CONFIDENCE,
+      binding,
+    };
   }
   if (framework.conventionalReceivers.includes(receiver)) {
-    return REGISTRATION_ROUTE_WEAK_CONFIDENCE;
+    return { confidence: REGISTRATION_ROUTE_WEAK_CONFIDENCE };
   }
   return framework.receiverNames.test(receiver) &&
     fileImportsModule(symbol, framework.modules, context)
-    ? REGISTRATION_ROUTE_WEAK_CONFIDENCE
+    ? { confidence: REGISTRATION_ROUTE_WEAK_CONFIDENCE }
     : undefined;
 }
 
