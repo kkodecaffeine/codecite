@@ -1,9 +1,23 @@
 {
   "name": "codecite",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "정책 claim 을 근거로 답하고 출처를 붙이는 한국어 정책 에이전트",
   "license": "Apache-2.0",
   "author": "Suh Junho",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kkodecaffeine/codecite.git"
+  },
+  "homepage": "https://github.com/kkodecaffeine/codecite#readme",
+  "bugs": "https://github.com/kkodecaffeine/codecite/issues",
+  "keywords": [
+    "policy",
+    "rag",
+    "citation",
+    "korean",
+    "code-graph",
+    "cross-repository"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22.13"
@@ -16,11 +30,21 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./graph": {
       "types": "./dist/graph/index.d.ts",
-      "import": "./dist/graph/index.js"
+      "import": "./dist/graph/index.js",
+      "default": "./dist/graph/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "graph": [
+        "./dist/graph/index.d.ts"
+      ]
     }
   },
   "files": [
@@ -37,7 +61,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "eval": "node dist/cli.js eval --cwd examples/dotori-market",
-    "example:graph": "node examples/dotori-market/graph/prepare-repos.mjs && node dist/cli.js graph build --cwd examples/dotori-market/graph && node dist/cli.js graph report --cwd examples/dotori-market/graph"
+    "example:graph": "node examples/dotori-market/graph/prepare-repos.mjs && node dist/cli.js graph build --cwd examples/dotori-market/graph && node dist/cli.js graph report --cwd examples/dotori-market/graph",
+    "check:package": "node scripts/check-package.mjs",
+    "prepublishOnly": "npm run lint && npm run typecheck && npm test && npm run build && npm run check:package"
   },
   "peerDependencies": {
     "typescript": ">=5"
