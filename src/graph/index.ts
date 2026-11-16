@@ -1,5 +1,6 @@
 // 저장소 그래프 진입점(`codecite/graph`). 답변 엔진 진입점과 따로 내보내, 답변 엔진만 쓰는 쪽은 그래프 도구를 읽지 않는다
 export type * from './types.js';
+export type * from './data/types.js';
 export {
   GraphConfigError,
   loadGraphConfig,
@@ -33,6 +34,15 @@ export {
   readRepositorySymbols,
   validateGraphManifest,
 } from './output.js';
+export {
+  buildDataGraphArtifacts,
+  buildEntityRelationGraph,
+  buildFieldWriterIndex,
+  GRAPH_ENTITIES_FILE,
+  GRAPH_FIELD_WRITERS_FILE,
+  MAX_WRITERS_PER_FIELD,
+  validateGraphOutput,
+} from './data/index.js';
 export {
   DEFAULT_GRAPH_PRESETS,
   defaultGraphExtractors,

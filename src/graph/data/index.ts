@@ -1,4 +1,5 @@
-// 데이터 그래프 단계. 탐지 결과와 레코드로 entities.json(엔티티 관계)과 field-writers.json(필드 쓰기 색인)을 만든다
+// 데이터 그래프 단계. 탐지 결과와 레코드로 entities.json(엔티티 관계)과 field-writers.json(필드 쓰기 색인)을 만들고,
+// 결과 폴더 검사(validateGraphOutput)를 함께 내보낸다
 import type { GraphBuildState } from '../types.js';
 import { GRAPH_ENTITIES_FILE, GRAPH_FIELD_WRITERS_FILE } from './constants.js';
 import { buildEntityRelationGraph } from './entities.js';
@@ -33,3 +34,4 @@ export {
   sortFieldWriterIndex,
 } from './field-writers.js';
 export { pluralize } from './naming.js';
+export { validateGraphOutput } from './validate.js';
