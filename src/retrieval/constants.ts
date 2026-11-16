@@ -108,3 +108,61 @@ export const USER_FACING_KNOWLEDGE_KINDS: ReadonlySet<string> = new Set([
   'user-policy',
   'partner-operation',
 ]);
+
+/** 검색 한 번에 dense·lexical 에서 뽑을 후보 수와 합친 뒤 남길 후보 수의 기본값 */
+export const DEFAULT_RETRIEVAL_OPTIONS = Object.freeze({
+  denseLimit: 30,
+  lexicalLimit: 30,
+  fusedLimit: 20,
+});
+
+/**
+ * 묶음 범위가 범위 밖이어도 살펴보는 BM25 상위 순위. 남은 후보가 덮지 못한 질문 낱말을 담았을 때만 남긴다
+ * 묶음은 질문 낱말을 몇 개 덮는지로 고르므로, 질문 말투 낱말을 더 담은 묶음이 이겨 핵심어 하나를 담은 BM25 상위 행을 통째로 버릴 수 있다
+ */
+export const POLICY_COVERAGE_PROTECTED_LEXICAL_RANK = 3;
+
+/** 묶음 범위를 고를 때 질문 낱말에서 더 빼는 낱말. 어느 묶음 claim 에나 흔해서 묶음을 가르지 못한다 */
+export const COVERAGE_GENERIC_QUERY_TOKENS: ReadonlySet<string> = new Set([
+  '혜택',
+  '신청',
+  '조건',
+  '대상',
+  '지급',
+  '받을',
+  '정리해',
+  '모두',
+  '핵심',
+  '목록',
+  '비교해',
+  '수',
+  '서비스',
+  '언제',
+]);
+
+/** 묶음 전체를 한 문장으로 요약한 claim 의 id 머리(`<머리><묶음 이름>`). 목록·개요 질문에서 이 claim 을 먼저 고른다 */
+export const POLICY_GROUP_SUMMARY_CLAIM_ID_PREFIX = 'group-summary-';
+
+/** 시점이나 걸리는 시간을 묻는 질문 */
+export const TIMING_QUESTION_PATTERN =
+  /(즉시|바로|실시간|언제|얼마나\s*(?:걸|후)|몇\s*(?:분|시간|일)|반영\s*(?:시점|시간)|지급\s*(?:시점|시간)|적립\s*(?:시점|시간)|주문\s*(?:직후|후)|결제\s*(?:직후|후))/i;
+
+/** 시점 질문이 묻는 행위. claim 문장에 같은 행위가 있어야 그 시점을 답으로 본다 */
+export const TIMING_ACTION_PATTERN = /지급|적립|반영|처리|만료|환불/g;
+
+/** 날짜·시간을 구체적으로 적은 표현 */
+export const CONCRETE_TIMING_PATTERN =
+  /(익일|다음\s*날|전날|당일|즉시|바로|실시간|직후|\d+\s*(?:분|시간|일)\s*(?:후|이내)?)/;
+
+/** "<대상>에 대해 알려줘" 꼴의 짧은 개요 질문. dense 상위 근거를 범위 다양화에서 지킨다 */
+export const GENERIC_DOMAIN_OVERVIEW_QUERY_PATTERN =
+  /^\S+에\s*대해\s*알려줘[?.!]*$/i;
+
+/** 절차 행만 놓고 BM25 로 뽑는 후보 수. 앞자리에 둘 절차 행보다 넉넉히 뽑아 덮은 낱말 수로 다시 고른다 */
+export const PROCEDURE_POLICY_LEXICAL_CANDIDATE_LIMIT = 40;
+
+/** 절차 행의 [나중에 이어지는 처리] 가 가리키는 행을 앞자리 뒤에 더 붙이는 수 */
+export const PROCEDURE_DEFERRED_EVIDENCE_LIMIT = 2;
+
+/** 다른 행의 섹션 줄과 견줄 정책 안내 앞부분의 최소 길이. 너무 짧으면 아무 줄에나 들어 있다 */
+export const DEFERRED_LINK_MIN_SUMMARY_CHARS = 12;

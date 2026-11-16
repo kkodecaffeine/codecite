@@ -1,6 +1,8 @@
 import type { PolicyChunk } from '../domain/policy-chunk.js';
 import type { PolicyClaimFacet, PolicyContextKind } from '../domain/types.js';
 import type { PolicyEvidence } from '../generation/types.js';
+import type { Embedder, Logger, VectorIndex } from '../ports.js';
+import type { Vocabulary } from '../text/types.js';
 
 /** 검색 후보 하나. 순위는 1 부터 세고, 그 검색에서 나오지 않았으면 비어 있다 */
 export interface PolicyRetrievalCandidate {
@@ -68,3 +70,26 @@ export type AmountUnitIntent = 'count' | 'money' | 'rate' | 'unspecified';
 /** 시간 질문이 묻는 모양. 시각 범위·시각 하나·걸리는 기간을 가린다 */
 export type TimeUnitIntent =
   'clock-range' | 'clock-point' | 'duration' | 'unspecified';
+
+/** 검색이 어떤 경로로 돌았는지. 임베더·벡터 색인이 없거나 dense 검색이 실패하면 bm25 다 */
+export type RetrievalMode = 'hybrid' | 'bm25';
+
+/** 하이브리드 검색 결과. 허브는 mode 를 trace.retrieval 에 남기고, denseError 가 있으면 경고를 남긴다 */
+export interface HybridRetrievalResult {
+  candidates: PolicyRetrievalCandidate[];
+  mode: RetrievalMode;
+  /** dense 검색이 실패한 까닭. 임베더나 벡터 색인이 없어 처음부터 BM25 만 돈 경우에는 비어 있다 */
+  denseError?: Error;
+}
+
+/** 하이브리드 검색기를 만드는 재료 */
+export interface HybridRetrieverOptions {
+  /** 활성 정책 조각 전체. BM25 와 같은 묶음 형제 확장이 이 안에서 찾는다 */
+  chunks: readonly PolicyChunk[];
+  /** 임베더와 벡터 색인이 둘 다 있을 때만 dense 검색을 돌린다 */
+  embedder?: Embedder;
+  index?: VectorIndex;
+  /** 낱말 나누기와 묶음 별칭(groupAliases) 에 쓰는 사전. 없으면 한국어 기본 사전을 쓴다 */
+  vocabulary?: Vocabulary;
+  logger?: Logger;
+}

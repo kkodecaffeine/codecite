@@ -67,7 +67,8 @@ export function rankPolicyChunksByScope(
   );
 }
 
-function interleaveChunks(
+/** 순위 여러 개를 같은 순위끼리 번갈아 넣어 하나로 합친다 */
+export function interleaveChunks(
   rankings: PolicyChunk[][],
   limit: number,
 ): PolicyChunk[] {
