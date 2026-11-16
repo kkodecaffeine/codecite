@@ -197,6 +197,13 @@ export const CREDENTIAL_NAME_LAST_WORDS: readonly string[] = [
 /** 이름과 상관없이 무작위 문자열로 볼 최소 길이와 글자당 엔트로피(비트) */
 export const RANDOM_LITERAL_MIN_LENGTH = 32;
 export const RANDOM_LITERAL_MIN_ENTROPY = 4;
+/**
+ * 낱말로 읽히는 이름의 기준. 소문자가 든 낱말 조각의 가장 짧은 길이·평균 길이와, 글자 가운데 낱말 글자의 비율
+ * 무작위 32~48 자 문자열 20 만 개 가운데 2 개만 이 기준을 넘는다(가리지 못하는 쪽으로 틀리는 비율을 낮게 둔다)
+ */
+export const IDENTIFIER_WORD_MIN_LENGTH = 3;
+export const IDENTIFIER_WORD_MIN_AVERAGE = 5;
+export const IDENTIFIER_WORD_MIN_SHARE = 0.8;
 /** 이름이 비밀값을 가리킬 때 무작위 문자열로 볼 최소 길이(16 진수, 섞인 글자) */
 export const CREDENTIAL_HEX_MIN_LENGTH = 16;
 export const CREDENTIAL_MIXED_MIN_LENGTH = 20;

@@ -5,6 +5,9 @@ import {
   CREDENTIAL_HEX_MIN_LENGTH,
   CREDENTIAL_MIXED_MIN_LENGTH,
   CREDENTIAL_NAME_LAST_WORDS,
+  IDENTIFIER_WORD_MIN_AVERAGE,
+  IDENTIFIER_WORD_MIN_LENGTH,
+  IDENTIFIER_WORD_MIN_SHARE,
   KNOWN_TOKEN_PATTERNS,
   RANDOM_LITERAL_MIN_ENTROPY,
   RANDOM_LITERAL_MIN_LENGTH,
@@ -186,7 +189,31 @@ function looksRandom(
     /[a-z]/.test(value) &&
     /[A-Z]/.test(value) &&
     /\d/.test(value) &&
-    !/^[A-Za-z][a-z]*(?:[A-Z][a-z]+)*\d*$/.test(value)
+    !/^[A-Za-z][a-z]*(?:[A-Z][a-z]+)*\d*$/.test(value) &&
+    !looksLikeIdentifier(value)
+  );
+}
+
+/**
+ * 낙타 표기 낱말을 이은 이름인지(`AcornCouponV2GenerateSettingModule`). 가운데 판 번호·약어가 끼어도 이름으로 본다
+ * 무작위 문자열은 소문자 조각이 짧게 끊겨 평균 길이와 낱말 글자 비율이 낮다
+ */
+function looksLikeIdentifier(value: string): boolean {
+  const tokens = value.match(/[A-Z]+(?![a-z])|[A-Z]?[a-z]+|\d+|[_-]+/g) ?? [];
+  if (tokens.join('') !== value) {
+    return false;
+  }
+  const words = tokens.filter((token) => /[a-z]/.test(token));
+  if (
+    words.length < 2 ||
+    words.some((word) => word.length < IDENTIFIER_WORD_MIN_LENGTH)
+  ) {
+    return false;
+  }
+  const letters = words.reduce((sum, word) => sum + word.length, 0);
+  return (
+    letters / words.length >= IDENTIFIER_WORD_MIN_AVERAGE &&
+    letters / value.length >= IDENTIFIER_WORD_MIN_SHARE
   );
 }
 

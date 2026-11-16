@@ -115,6 +115,23 @@ describe('redactSecretLiterals', () => {
     expect(redactSecretLiterals(label)).toBe(label);
   });
 
+  it('가운데 숫자가 낀 긴 낙타 표기 이름은 무작위 문자열로 보지 않는다', () => {
+    for (const name of [
+      'AcornCouponV2GenerateSettingModule',
+      'ReviewPhotoS3UploadPresignedUrlFactory',
+      'MembershipGrade2026PolicySnapshotLoader',
+    ]) {
+      const source = `const name = ${quoted(name)};`;
+      expect(redactSecretLiterals(source)).toBe(source);
+    }
+    for (let seed = 20; seed < 60; seed += 1) {
+      const token = fakeToken(40, seed);
+      expect(redactSecretLiterals(`const value = ${quoted(token)};`)).toBe(
+        `const value = '${REDACTED_VALUE}';`,
+      );
+    }
+  });
+
   it('형식이 알려진 토큰과 인증 머리글 값은 어디에 있든 가린다', () => {
     const prefixed = ['gh', 'p_'].join('') + fakeToken(36, 7);
     const keyId = ['AK', 'IA'].join('') + fakeToken(16, 8).toUpperCase();

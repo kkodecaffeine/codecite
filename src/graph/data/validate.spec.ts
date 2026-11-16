@@ -498,6 +498,24 @@ describe('validateGraphOutput: 실패', () => {
     expect(JSON.stringify(result)).not.toContain('hunter-two');
   });
 
+  it('긴 낙타 표기 심볼 이름과 실행 사실의 식은 비밀값으로 보지 않지만 형식이 알려진 토큰은 잡는다', async () => {
+    const name = 'AcornCouponV2GeneratedImageLoaderFactory';
+    await edit('field-writers.json', (index) => {
+      index.writers['shop-api:status'][0].symbol = name;
+    });
+    await edit('topology.json', (graph) => {
+      graph.nodes[1].name = 'ReviewPhotoV2UploadPresignedUrlFactory';
+    });
+    expect(issuesOf(await validateGraphOutput(output), 'secret')).toEqual([]);
+
+    const token = fakeGithubToken();
+    await edit('field-writers.json', (index) => {
+      index.writers['shop-api:status'][0].symbol = token;
+    });
+    const secrets = issuesOf(await validateGraphOutput(output), 'secret');
+    expect(secrets.map((issue) => issue.file)).toEqual(['field-writers.json']);
+  });
+
   it('이미 가린 표시와 해시 값은 비밀값으로 보지 않는다', async () => {
     await edit('field-writers.json', (index) => {
       index.writers['shop-api:status'][0].valueSummary =
