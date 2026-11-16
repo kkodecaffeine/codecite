@@ -181,3 +181,39 @@ export interface ManualLink {
   evidence: string;
   author?: string;
 }
+
+// ── 파일 고르기 ──
+
+/** 저장소 하나에 거는 파일 고르기 규칙 */
+export interface FileSelectionRules {
+  /** 비우면 저장소 전체 */
+  include?: readonly string[];
+  exclude?: readonly string[];
+  defaultExcludes: readonly string[];
+  /** 추출기가 맡는 확장자. 주면 여기 없는 확장자는 읽지 않는다 */
+  extensions?: readonly string[];
+}
+
+/** 고르지 않은 파일 수를 까닭별로 센다. 그래프가 조용히 비는 일을 알아채려고 남긴다 */
+export interface FileSkipCounts {
+  /** 바닥 규칙(환경 설정·CSV·비밀 경로·의존성 폴더) */
+  floor: number;
+  /** 기본 제외(테스트·예제·마이그레이션) */
+  defaultExcludes: number;
+  /** 저장소 exclude */
+  exclude: number;
+  /** 저장소 include 에 맞지 않음 */
+  notIncluded: number;
+  /** 맡는 추출기가 없는 확장자 */
+  unsupported: number;
+  /** 글이 아닌 파일 */
+  binary: number;
+  /** 크기 상한을 넘는 파일 */
+  tooLarge: number;
+}
+
+export interface FileSelection {
+  /** 고른 파일. 저장소 기준 상대 경로, 정렬돼 있다 */
+  selected: string[];
+  skipped: FileSkipCounts;
+}
