@@ -1,0 +1,37 @@
+{
+  "source": {
+    "type": "csv",
+    "path": "policies.csv"
+  },
+  "llm": {
+    "provider": "openai"
+  },
+  "embedding": {
+    "provider": "openai"
+  },
+  "index": {
+    "path": ".codecite/index.json"
+  },
+  "vocabulary": {
+    "synonyms": {
+      "적립금": ["포인트", "리워드"],
+      "포인트": ["적립금"],
+      "리워드": ["적립금"],
+      "반품": ["환불"],
+      "불량": ["하자"],
+      "할인권": ["쿠폰"],
+      "택배비": ["배송비"],
+      "배달비": ["배송비"],
+      "발송": ["출고"],
+      "레벨": ["등급"]
+    },
+    "stopwords": ["혹시", "궁금해요", "궁금해"],
+    "groupAliases": {
+      "points": ["적립금", "포인트", "리워드"],
+      "refund": ["환불", "반품"],
+      "coupon": ["쿠폰", "할인권"],
+      "shipping": ["배송", "배송비", "택배", "출고"],
+      "membership": ["멤버십", "등급", "VIP", "골드", "실버"]
+    }
+  }
+}

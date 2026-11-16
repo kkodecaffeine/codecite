@@ -1,0 +1,181 @@
+[
+  {
+    "id": "points-01",
+    "question": "적립금은 언제 사라져요?",
+    "expectedClaimIds": ["claim-8b2a9a4ce48882bc"]
+  },
+  {
+    "id": "points-02",
+    "question": "포인트는 결제 금액의 몇 퍼센트가 쌓여요?",
+    "expectedClaimIds": ["claim-e161584773e268dd"]
+  },
+  {
+    "id": "points-03",
+    "question": "적립금으로 배송비도 낼 수 있어요?",
+    "expectedClaimIds": ["claim-9d10cefdcb84c520"]
+  },
+  {
+    "id": "points-04",
+    "question": "혹시 구매 확정하면 적립금은 언제 들어오는 거야?",
+    "expectedClaimIds": ["claim-436fdb41c7527c3c"]
+  },
+  {
+    "id": "points-05",
+    "question": "불량으로 환불받으면 그때 받았던 적립금도 빼 가요?",
+    "expectedClaimIds": ["claim-465e885ce781125b"]
+  },
+  {
+    "id": "points-06",
+    "question": "주문을 취소하면 결제에 쓴 적립금은 어떻게 돼요?",
+    "expectedClaimIds": ["claim-83f4f7e5e7a78722"]
+  },
+  {
+    "id": "refund-01",
+    "question": "환불은 배송 받고 며칠 안에 신청해야 해요?",
+    "expectedClaimIds": ["claim-4b9a141cdb5d4dab"]
+  },
+  {
+    "id": "refund-02",
+    "question": "반품 배송비는 누가 내요?",
+    "expectedClaimIds": ["claim-ae9a0136cc8519ea"]
+  },
+  {
+    "id": "refund-03",
+    "question": "주문 제작 상품도 환불 받을 수 있나요?",
+    "expectedClaimIds": ["claim-ef11e78fa59564f7"]
+  },
+  {
+    "id": "refund-04",
+    "question": "상품이 불량이면 언제까지 환불돼요?",
+    "expectedClaimIds": ["claim-f6ca7e49ea8b917c"]
+  },
+  {
+    "id": "refund-05",
+    "question": "환불 처리 순서가 어떻게 돼요?",
+    "expectedClaimIds": ["claim-ce435ceee18b51b9"]
+  },
+  {
+    "id": "refund-06",
+    "question": "카드로 결제했는데 환불하면 돈은 언제 들어와? 좀 알려줘",
+    "expectedClaimIds": ["claim-fdff9ee6dd8ea11b", "claim-cda7984656f62b9d"]
+  },
+  {
+    "id": "coupon-01",
+    "question": "쿠폰 유효 기간은 얼마나 돼요?",
+    "expectedClaimIds": ["claim-dd9edf5b405da5b8"]
+  },
+  {
+    "id": "coupon-02",
+    "question": "할인권 두 장을 같이 쓸 수 있어요?",
+    "expectedClaimIds": ["claim-dbd8128ab41911b3"]
+  },
+  {
+    "id": "coupon-03",
+    "question": "첫 주문 쿠폰은 얼마 이상 사야 쓸 수 있어요?",
+    "expectedClaimIds": ["claim-cad09994aee1ccb1"]
+  },
+  {
+    "id": "coupon-04",
+    "question": "타임 특가 상품에도 쿠폰 적용돼요?",
+    "expectedClaimIds": ["claim-3789d2d27af4933f"]
+  },
+  {
+    "id": "coupon-05",
+    "question": "혹시 주문 취소하면 썼던 쿠폰 다시 돌려줘?",
+    "expectedClaimIds": ["claim-3607c30d7987cf05"]
+  },
+  {
+    "id": "coupon-06",
+    "question": "등급 할인을 받으면서 쿠폰도 같이 쓸 수 있나요?",
+    "expectedClaimIds": ["claim-99ed550d65271d89"]
+  },
+  {
+    "id": "coupon-07",
+    "question": "쿠폰 쓴 주문에서 하나만 반품하면 할인은 어떻게 돼요?",
+    "expectedClaimIds": ["claim-41da1d2f4bbb5728"]
+  },
+  {
+    "id": "shipping-01",
+    "question": "기본 배송비는 얼마예요?",
+    "expectedClaimIds": ["claim-5d33617e851e3c16"]
+  },
+  {
+    "id": "shipping-02",
+    "question": "택배비 안 내려면 얼마 이상 사야 돼요?",
+    "expectedClaimIds": ["claim-a81aabe4c17e32aa"]
+  },
+  {
+    "id": "shipping-03",
+    "question": "제주도는 무료 배송이어도 추가 배송비를 내요?",
+    "expectedClaimIds": ["claim-8112c6bcab9b6ab6"]
+  },
+  {
+    "id": "shipping-04",
+    "question": "오늘 주문하면 언제 출고돼요?",
+    "expectedClaimIds": ["claim-3aabb2ecf73ea5e4"]
+  },
+  {
+    "id": "shipping-05",
+    "question": "혹시 출고가 너무 늦어지면 보상 같은 거 있어?",
+    "expectedClaimIds": ["claim-5436d263e0ab2733"]
+  },
+  {
+    "id": "shipping-06",
+    "question": "냉동 식품을 금요일에 주문하면 언제 보내 줘요?",
+    "expectedClaimIds": ["claim-51e5ca1369550962"]
+  },
+  {
+    "id": "membership-01",
+    "question": "멤버십 등급은 어떻게 정해져요?",
+    "expectedClaimIds": ["claim-4f034fa23e9c726e"]
+  },
+  {
+    "id": "membership-02",
+    "question": "회원 레벨은 언제 다시 매겨져요?",
+    "expectedClaimIds": ["claim-8c2594ea127ef4d7"]
+  },
+  {
+    "id": "membership-03",
+    "question": "환불한 주문 금액도 등급 계산에 들어가요?",
+    "expectedClaimIds": ["claim-94d4d34680edcc01"]
+  },
+  {
+    "id": "membership-04",
+    "question": "VIP 등급이면 배송비 안 내도 돼?",
+    "expectedClaimIds": ["claim-225178d85dc1fb6e"]
+  },
+  {
+    "id": "membership-05",
+    "question": "골드 등급 되면 뭐가 좋아? 혜택 좀 알려줘",
+    "expectedClaimIds": ["claim-ca9ecd4c7e480a4b", "claim-ef3d6c3515293171"]
+  },
+  {
+    "id": "membership-06",
+    "question": "매달 받는 무료 배송 쿠폰은 언제까지 써야 해요?",
+    "expectedClaimIds": ["claim-351a57390805d117"]
+  },
+  {
+    "id": "insufficient-01",
+    "question": "적립금을 다른 회원에게 넘겨줄 수 있어요?",
+    "expectedClaimIds": [],
+    "expectStatus": "insufficient_evidence"
+  },
+  {
+    "id": "insufficient-02",
+    "question": "해외로도 배송해 주나요?",
+    "expectedClaimIds": [],
+    "expectStatus": "insufficient_evidence"
+  },
+  {
+    "id": "insufficient-03",
+    "question": "주문한 상품을 매장에 가서 직접 받아 올 수 있어요?",
+    "expectedClaimIds": [],
+    "expectStatus": "insufficient_evidence"
+  },
+  {
+    "id": "insufficient-04",
+    "question": "사이즈가 안 맞으면 다른 사이즈로 교환해 주나요?",
+    "expectedClaimIds": [],
+    "expectStatus": "insufficient_evidence"
+  }
+]
