@@ -295,6 +295,77 @@ describe('typeormPreset access', () => {
     ]);
   });
 
+  it('reads custom repositories, string table names and builder writes without a known entity', async () => {
+    const symbols = await extract({
+      'src/stat/point-stat.repository.ts': `import { EntityRepository, Repository } from 'typeorm';
+
+@EntityRepository(PointStat)
+export class PointStatRepository extends Repository<PointStat> {
+  async markExported(day: string) {
+    await this.update({ day }, { exportedFlag: 1 });
+  }
+}
+`,
+      'src/stat/review-stat.repository.ts': `import { Repository } from 'typeorm';
+
+export class ReviewStatRepository extends Repository<ReviewStat> {
+  async reset(day: string) {
+    await this.update({ day }, { reviewCount: 0 });
+  }
+}
+`,
+      'src/schedule/schedule.service.ts': `export class ScheduleService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  async closeDay(tableName: string) {
+    await this.dataSource.createQueryBuilder().update(tableName).set({ closedAt: () => 'NOW()' }).execute();
+  }
+
+  async closeMember(seq: number) {
+    await this.dataSource.createQueryBuilder().update('members').set({ closedFlag: true }).where('seq = :seq', { seq }).execute();
+  }
+
+  async update(seq: number, input: object) {
+    return this.update(seq, { closedFlag: false });
+  }
+}
+`,
+    });
+    const writes = detectAll(symbols, contextFor(symbols))
+      .filter((item) => item.kind === 'field-write')
+      .map(
+        (item) =>
+          item.kind === 'field-write' && [
+            item.symbol,
+            item.entity,
+            item.field,
+            item.writeKind,
+          ],
+      );
+
+    expect(writes).toEqual([
+      ['ScheduleService.closeDay', undefined, 'closedAt', 'update-builder'],
+      [
+        'ScheduleService.closeMember',
+        'members',
+        'closedFlag',
+        'update-builder',
+      ],
+      [
+        'PointStatRepository.markExported',
+        'PointStat',
+        'exportedFlag',
+        'update-call',
+      ],
+      [
+        'ReviewStatRepository.reset',
+        'ReviewStat',
+        'reviewCount',
+        'update-call',
+      ],
+    ]);
+  });
+
   it('ignores map and array calls, comments and strings', async () => {
     const symbols = await extract(FILES);
     const reconcile = detectAll(symbols, contextFor(symbols)).filter(

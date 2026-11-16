@@ -123,6 +123,10 @@ export const TYPEORM_BUILDER_ENTITY_STEPS: readonly string[] = [
   'into',
   'from',
 ];
+/** 쿼리 빌더 단계에 문자열로 준 테이블 이름(`update('members')`)으로 볼 글자 */
+export const TYPEORM_TABLE_NAME_PATTERN = /^[A-Za-z_][\w.]*$/;
+/** 사용자 저장소 클래스를 표시하는 데코레이터(`@EntityRepository(Order)`) */
+export const TYPEORM_ENTITY_REPOSITORY_DECORATOR = 'EntityRepository';
 /** 바꿀 필드 묶음을 받는 쿼리 빌더 단계 */
 export const TYPEORM_BUILDER_FIELD_STEPS: readonly string[] = ['set', 'values'];
 

@@ -135,7 +135,7 @@ export function fieldWriteDetections(
             `${source.site.name}(…) sets ${field}`,
           ),
           kind: 'field-write',
-          entity: source.entity,
+          ...(source.entity ? { entity: source.entity } : {}),
           field,
           writeKind: source.writeKind,
           valueSummary: valueSummary(summary),

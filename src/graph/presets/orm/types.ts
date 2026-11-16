@@ -25,7 +25,8 @@ export interface EntityAccess {
 /** 필드 쓰기 하나를 만드는 재료 */
 export interface FieldWriteSource {
   site: CodeSite;
-  entity: string;
+  /** 쓰는 엔티티. 쿼리 빌더 연쇄에서 대상을 정적으로 못 읽으면 비운다 */
+  entity?: string;
   /** 바꿀 필드 묶음(객체 인자) */
   fields: CodeSiteArgument;
   writeKind: FieldWriteKind;

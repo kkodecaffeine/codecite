@@ -5,6 +5,7 @@ import type { EntityColumn } from '../../../extensions/code-knowledge.js';
 import type {
   ClassMember,
   CodeSite,
+  CodeSiteArgument,
   Detection,
   DetectionPreset,
   EntityDeclarationDetection,
@@ -40,6 +41,7 @@ import {
   TYPEORM_DEFAULT_TABLE_NOTE,
   TYPEORM_ENTITY_DECORATOR,
   TYPEORM_ENTITY_MANAGER_TYPE,
+  TYPEORM_ENTITY_REPOSITORY_DECORATOR,
   TYPEORM_FIELD_ARGUMENT,
   TYPEORM_GENERATED_COLUMN_DECORATOR,
   TYPEORM_GET_REPOSITORY,
@@ -52,6 +54,7 @@ import {
   TYPEORM_RELATION_DECORATORS,
   TYPEORM_REPOSITORY_TYPES,
   TYPEORM_SINGLE_RESULT_METHODS,
+  TYPEORM_TABLE_NAME_PATTERN,
   TYPEORM_WRITE_METHODS,
 } from './constants.js';
 import {
@@ -303,6 +306,9 @@ function repositoryBinding(
   context: PresetContext,
   locals: ReadonlyMap<string, EntityBinding>,
 ): EntityBinding | undefined {
+  if (receiver === 'this') {
+    return ownRepositoryBinding(symbol, context);
+  }
   const member = receiverMember(symbol, receiver, context);
   if (member) {
     const inject = memberDecorator(member, [
@@ -474,18 +480,22 @@ function builderChain(
     .filter((site) =>
       TYPEORM_BUILDER_ENTITY_STEPS.includes(leafName(site.name)),
     )
-    .map((site) => site.args[0]?.identifier)
-    .find(isClassName);
+    .map((site) => builderEntityArgument(site.args[0]))
+    .find((name) => name !== undefined);
   const rootEntity = isClassName(root.args[0]?.identifier)
     ? root.args[0]?.identifier
     : undefined;
   const entity = bound?.entity ?? rootEntity ?? stepEntity;
-  if (!entity) {
-    return;
-  }
   const writeStep = chain.find((site) =>
     TYPEORM_BUILDER_WRITE_STEPS.includes(leafName(site.name)),
   );
+  if (!entity) {
+    // 대상(변수로 준 테이블 이름 등)을 못 읽어도 update·insert 단계의 set·values 는 틀림없는 필드 쓰기다. 엔티티 없이 남긴다
+    if (writeStep) {
+      writes.push(...builderFieldWrites(chain, undefined));
+    }
+    return;
+  }
   const via = bound?.via ?? `${TYPEORM_QUERY_BUILDER}(…)`;
   const confidence = bound?.confidence ?? TYPEORM_CONFIDENCE.builderAccess;
   accesses.push({
@@ -508,19 +518,86 @@ function builderChain(
         confidence,
       });
     }
+  }
+  writes.push(...builderFieldWrites(chain, entity));
+}
+
+/** 쿼리 빌더 연쇄의 set·values 단계 객체마다 필드 쓰기 출처 하나 */
+function builderFieldWrites(
+  chain: readonly CodeSite[],
+  entity: string | undefined,
+): FieldWriteSource[] {
+  return chain.flatMap((site) => {
     const fields = site.args[0];
-    if (
-      TYPEORM_BUILDER_FIELD_STEPS.includes(step) &&
+    return TYPEORM_BUILDER_FIELD_STEPS.includes(leafName(site.name)) &&
       fields &&
       (fields.properties || fields.elements)
-    ) {
-      writes.push({
-        site,
-        entity,
-        fields,
-        writeKind: 'update-builder',
-        confidence: TYPEORM_CONFIDENCE.fieldWrite,
-      });
-    }
+      ? [
+          {
+            site,
+            ...(entity ? { entity } : {}),
+            fields,
+            writeKind: 'update-builder' as const,
+            confidence: TYPEORM_CONFIDENCE.fieldWrite,
+          },
+        ]
+      : [];
+  });
+}
+
+/** 쿼리 빌더 단계의 대상 인자. 엔티티 클래스 이름이나 문자열 테이블 이름 */
+function builderEntityArgument(
+  argument: CodeSiteArgument | undefined,
+): string | undefined {
+  if (isClassName(argument?.identifier)) {
+    return argument?.identifier;
   }
+  const literal = argument?.literal;
+  return literal !== undefined && TYPEORM_TABLE_NAME_PATTERN.test(literal)
+    ? literal
+    : undefined;
+}
+
+/**
+ * 사용자 저장소 클래스(`class X extends Repository<Order>`, `@EntityRepository(Order)`) 안의 `this.` 호출이 가리키는 엔티티
+ * 같은 파일의 소유 클래스 심볼을 본다. 클래스를 못 찾으면 잇지 않는다
+ */
+function ownRepositoryBinding(
+  symbol: ExtractedSymbol,
+  context: PresetContext,
+): EntityBinding | undefined {
+  const owner = symbol.symbol.slice(0, symbol.symbol.indexOf('.'));
+  if (!owner) {
+    return undefined;
+  }
+  const declaration = context.symbols?.find(
+    (candidate) =>
+      candidate.filePath === symbol.filePath && candidate.symbol === owner,
+  );
+  if (!declaration) {
+    return undefined;
+  }
+  const decorator = (declaration.sites ?? []).find(
+    (site) =>
+      site.kind === 'decorator' &&
+      leafName(site.name) === TYPEORM_ENTITY_REPOSITORY_DECORATOR,
+  );
+  const decorated = entityArgument(decorator?.args[0]);
+  if (decorator && decorated) {
+    return {
+      entity: decorated,
+      via: siteLabel(decorator),
+      confidence: TYPEORM_CONFIDENCE.boundAccess,
+    };
+  }
+  const extended = new RegExp(
+    `\\bclass\\s+${owner}\\b[^{]*?\\bextends\\s+(?:${TYPEORM_REPOSITORY_TYPES.join('|')})\\s*<\\s*([A-Z][\\w$]*)\\s*>`,
+  ).exec(declaration.content);
+  return extended
+    ? {
+        entity: extended[1],
+        via: `${owner} extends ${extended[0].split(/extends\s+/)[1]}`,
+        confidence: TYPEORM_CONFIDENCE.boundAccess,
+      }
+    : undefined;
 }

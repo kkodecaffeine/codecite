@@ -26,7 +26,7 @@ node ../../dist/cli.js ask "적립금은 언제 사라져요?"
 아직 npm 에 배포하지 않았습니다. GitHub 태그로 판을 고정해 설치합니다. 설치할 때 패키지가 스스로 빌드합니다.
 
 ```bash
-npm i -D git+https://github.com/kkodecaffeine/codecite.git#v0.1.3
+npm i -D git+https://github.com/kkodecaffeine/codecite.git#v0.1.4
 ```
 
 설치한 프로젝트 안에서는 아래 예시의 `npx codecite …` 가 그대로 돕니다. ESM 과 CommonJS(`require('codecite')`, `require('codecite/graph')`) 양쪽에서 불러올 수 있습니다.
