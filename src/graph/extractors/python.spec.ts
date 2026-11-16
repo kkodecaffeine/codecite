@@ -459,6 +459,150 @@ class CouponHandler:
     ).toEqual(['self.store.save']);
   });
 
+  it('파일 최상위의 실행 문장을 <module> 심볼 하나로 모은다(라우터 연결, 예약 설정 딕셔너리, 작업 등록)', async () => {
+    // 저장소의 비밀값 검사에 걸리지 않도록 조각을 실행 중에 잇는다
+    const fakeRepoToken = ['ghp', 'Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9St0Uv1Wx2'].join(
+      '_',
+    );
+    const { symbols } = await pythonExtractor().extract(
+      [
+        file(
+          'worker/main.py',
+          `"""도토리 마켓 작업자 진입점"""
+from fastapi import FastAPI
+from .points import router as points_router
+
+app = FastAPI()
+app.include_router(points_router, prefix='/v1')
+celery.conf.beat_schedule = {
+    'expire-points': {'task': 'points.expire', 'schedule': crontab(hour=3)},
+}
+scheduler.add_job(expire_points, 'cron', hour=3)
+payments.configure(token='${fakeRepoToken}')
+if __name__ == '__main__':
+    uvicorn.run(app, port=8000)
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(symbols.map((item) => [item.symbol, item.kind])).toEqual([
+      ['app', 'constant'],
+      ['<module>', 'module'],
+    ]);
+    const moduleSymbol = bySymbol(symbols, '<module>');
+    expect([moduleSymbol.lineStart, moduleSymbol.lineEnd]).toEqual([6, 13]);
+    expect(moduleSymbol.content.split('\n')[0]).toBe(
+      "app.include_router(points_router, prefix='/v1')",
+    );
+    expect(moduleSymbol.content).not.toContain('FastAPI()');
+    expect(targets(moduleSymbol, 'IMPORTS')).toEqual([
+      'router as points_router from .points',
+    ]);
+    expect(targets(moduleSymbol, 'CALLS')).toEqual([
+      'app.include_router',
+      'crontab',
+      'payments.configure',
+      'scheduler.add_job',
+      'uvicorn.run',
+    ]);
+    expect(brief(moduleSymbol).at(-1)).toBe(
+      '13 calls uvicorn.run = app, port=8000 | __name__ == <literal>',
+    );
+    const sites = moduleSymbol.sites ?? [];
+    expect(sites[0]).toEqual({
+      kind: 'call',
+      name: 'app.include_router',
+      line: 6,
+      args: [
+        { text: 'points_router', identifier: 'points_router' },
+        {
+          text: 'prefix=<literal>',
+          properties: { prefix: { text: '<literal>', literal: '/v1' } },
+        },
+      ],
+    });
+    expect(sites[1]).toEqual({
+      kind: 'assign',
+      name: 'celery.conf.beat_schedule',
+      line: 7,
+      args: [
+        {
+          text: '{<literal>: {<literal>: <literal>, <literal>: crontab(hour=3)}}',
+          properties: {
+            'expire-points': {
+              text: '{<literal>: <literal>, <literal>: crontab(hour=3)}',
+              properties: {
+                task: { text: '<literal>', literal: 'points.expire' },
+                schedule: { text: 'crontab(hour=3)' },
+              },
+            },
+          },
+        },
+      ],
+    });
+    expect(
+      sites.find((site) => site.name === 'payments.configure')?.args,
+    ).toEqual([
+      {
+        text: 'token=<literal>',
+        properties: { token: { text: '<literal>', literal: '<redacted>' } },
+      },
+    ]);
+    expect(JSON.stringify(sites)).not.toContain(fakeRepoToken);
+    expect(bySymbol(symbols, 'app').sites?.[0]).toEqual({
+      kind: 'assign',
+      name: 'app',
+      line: 5,
+      args: [{ text: 'FastAPI()' }],
+    });
+  });
+
+  it('가져오기·정의·독스트링·선언만 있는 if·try 뿐인 파일에는 모듈 심볼을 만들지 않는다', async () => {
+    const { symbols } = await pythonExtractor().extract(
+      [
+        file(
+          'worker/models.py',
+          `"""적립금 모델"""
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .order import Order
+try:
+    import ujson as json
+except ImportError:
+    import json
+
+MAX_POINTS = 5000
+
+
+class PointGrade(str, Enum):
+    BASIC = 'basic'
+
+
+def grade_of(total):
+    return PointGrade.BASIC
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(symbols.map((item) => item.symbol)).toEqual([
+      'MAX_POINTS',
+      'PointGrade',
+      'grade_of',
+    ]);
+    expect(bySymbol(symbols, 'PointGrade').sites).toEqual([
+      {
+        kind: 'assign',
+        name: 'PointGrade.BASIC',
+        line: 14,
+        args: [{ text: '<literal>', literal: 'basic' }],
+      },
+    ]);
+  });
+
   it('맡을 파일이 없으면 python3 을 띄우지 않는다', async () => {
     const result = await pythonExtractor({
       command: join(scratch, 'never-started'),

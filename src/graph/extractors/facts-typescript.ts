@@ -244,9 +244,10 @@ export function createTypeScriptFactProjector(
       ? unwrapValue(node.expression)
       : node;
 
-  const bodyFacts = (
+  /** 함수 본문(블록이나 식) 또는 파일 최상위 문장 묶음을 펼친다 */
+  const projectFacts = (
     sourceFile: TypeScript.SourceFile,
-    body: TypeScript.ConciseBody,
+    body: TypeScript.ConciseBody | readonly TypeScript.Statement[],
   ): ExecutionFact[] => {
     const facts: ExecutionFact[] = [];
     const add = (
@@ -683,7 +684,9 @@ export function createTypeScriptFactProjector(
       }
     };
 
-    if (ts.isBlock(body)) {
+    if (isStatementList(body)) {
+      walkStatements(body, [], false);
+    } else if (ts.isBlock(body)) {
       walkStatements(body.statements, [], false);
     } else {
       const line = lineOf(sourceFile, body);
@@ -775,5 +778,19 @@ export function createTypeScriptFactProjector(
     return finalizeFacts(facts);
   };
 
-  return { bodyFacts, constantFacts, enumFacts, text, callee };
+  return {
+    bodyFacts: (sourceFile, body) => projectFacts(sourceFile, body),
+    statementFacts: (sourceFile, statements) =>
+      projectFacts(sourceFile, statements),
+    constantFacts,
+    enumFacts,
+    text,
+    callee,
+  };
+}
+
+function isStatementList(
+  body: TypeScript.ConciseBody | readonly TypeScript.Statement[],
+): body is readonly TypeScript.Statement[] {
+  return Array.isArray(body);
 }

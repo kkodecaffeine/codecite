@@ -140,6 +140,13 @@ export const RANDOM_RUN_MIN_ENTROPY = 3.5;
 export const IMPORT_TARGET_SEPARATOR = ' from ';
 export const WHOLE_MODULE_IMPORT = '*';
 
+/**
+ * 파일 최상위의 실행 문장(라우트 등록, 예약 작업, 설정 대입)을 묶는 심볼. 파일마다 하나이고,
+ * 선언·가져오기·내보내기만 있는 파일에는 만들지 않는다. 이름은 어느 언어의 식별자와도 겹치지 않게 꺾쇠로 감싼다
+ */
+export const MODULE_SYMBOL_NAME = '<module>';
+export const MODULE_SYMBOL_KIND = 'module';
+
 /** 같은 파일에 같은 이름 심볼이 또 나오면 이름 뒤에 붙이는 꼬리(`refundOrder~2`). 나온 순서로 센다 */
 export const DUPLICATE_SYMBOL_SEPARATOR = '~';
 
@@ -185,4 +192,6 @@ export const PYTHON_EXTRACT_SETTINGS: PythonExtractSettings = {
   maxSiteArgumentDepth: MAX_SITE_ARGUMENT_DEPTH,
   maxSiteArgumentEntries: MAX_SITE_ARGUMENT_ENTRIES,
   maxSiteLiteralLength: MAX_SITE_LITERAL_LENGTH,
+  moduleSymbol: MODULE_SYMBOL_NAME,
+  moduleKind: MODULE_SYMBOL_KIND,
 };

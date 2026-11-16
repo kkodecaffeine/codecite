@@ -492,12 +492,188 @@ export enum CouponState {
     expect(JSON.stringify(symbols.map((item) => item.sites))).not.toContain(
       fakeLiveKey,
     );
-    expect(bySymbol(symbols, 'couponClient').sites?.[0].args[0]).toEqual({
+    const clientSites = bySymbol(symbols, 'couponClient').sites ?? [];
+    expect(clientSites.map((site) => [site.kind, site.name])).toEqual([
+      ['assign', 'couponClient'],
+      ['call', 'axios.create'],
+    ]);
+    expect(clientSites[1].args[0]).toEqual({
       text: '{ baseURL: <env> }',
       properties: {
         baseURL: { text: '<env>', identifier: 'process.env.COUPON_API_URL' },
       },
     });
     expect(bySymbol(symbols, 'CouponState').sites).toBeUndefined();
+  });
+
+  it('파일 최상위의 실행 문장을 <module> 심볼 하나로 모으고, 이미 심볼이 된 선언은 겹치지 않는다', async () => {
+    // 저장소의 비밀값 검사에 걸리지 않도록 조각을 실행 중에 잇는다
+    const fakeLiveKey = ['sk', 'live', 'Dotori1Acorn2Market3Shop4'].join('_');
+    const { symbols } = await typescriptExtractor().extract(
+      [
+        file(
+          'src/server.ts',
+          `'use strict';
+import express from 'express';
+import { couponRouter } from './coupons/coupon.router';
+
+const app = express();
+const { port } = loadShopConfig();
+app.get('/orders', listOrders);
+app.use('/api/coupons', couponRouter);
+app.post('/refunds', async (req, res) => {
+  await refundService.request(req.body.orderId);
+});
+fastify.register(pointRoutes, { prefix: '/points' });
+cron.schedule('0 3 * * *', () => pointService.expire());
+new Worker(REFUND_QUEUE, (job) => refundService.process(job.data));
+app.locals.currency = 'KRW';
+paymentClient.configure({ apiKey: '${fakeLiveKey}' });
+
+export function listOrders() {
+  return [];
+}
+export default app;
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(symbols.map((item) => [item.symbol, item.kind])).toEqual([
+      ['app', 'constant'],
+      ['<module>', 'module'],
+      ['listOrders', 'function'],
+    ]);
+    const moduleSymbol = bySymbol(symbols, '<module>');
+    expect([moduleSymbol.lineStart, moduleSymbol.lineEnd]).toEqual([6, 16]);
+    expect(moduleSymbol.content.split('\n')[0]).toBe(
+      'const { port } = loadShopConfig();',
+    );
+    expect(moduleSymbol.content).not.toContain('express()');
+    expect(moduleSymbol.content).not.toContain('use strict');
+    expect(targets(moduleSymbol, 'IMPORTS')).toEqual([
+      'couponRouter from ./coupons/coupon.router',
+    ]);
+    expect(targets(moduleSymbol, 'CALLS')).toEqual([
+      'app.get',
+      'app.post',
+      'app.use',
+      'cron.schedule',
+      'fastify.register',
+      'loadShopConfig',
+      'paymentClient.configure',
+      'pointService.expire',
+      'refundService.process',
+      'refundService.request',
+    ]);
+    expect(
+      moduleSymbol.executionFacts?.find((fact) => fact.subject === 'app.get'),
+    ).toEqual({
+      line: 7,
+      kind: 'calls',
+      subject: 'app.get',
+      value: '<literal>, listOrders',
+    });
+    const sites = moduleSymbol.sites ?? [];
+    expect(
+      sites.map((site) => [site.kind, site.name, site.line, site.args[0]]),
+    ).toEqual([
+      ['call', 'loadShopConfig', 6, undefined],
+      ['call', 'app.get', 7, { text: '<literal>', literal: '/orders' }],
+      ['call', 'app.use', 8, { text: '<literal>', literal: '/api/coupons' }],
+      ['call', 'app.post', 9, { text: '<literal>', literal: '/refunds' }],
+      [
+        'call',
+        'refundService.request',
+        10,
+        { text: 'req.body.orderId', identifier: 'req.body.orderId' },
+      ],
+      [
+        'call',
+        'fastify.register',
+        12,
+        { text: 'pointRoutes', identifier: 'pointRoutes' },
+      ],
+      ['call', 'pointService.expire', 13, undefined],
+      [
+        'call',
+        'cron.schedule',
+        13,
+        { text: '<literal>', literal: '0 3 * * *' },
+      ],
+      [
+        'call',
+        'refundService.process',
+        14,
+        { text: 'job.data', identifier: 'job.data' },
+      ],
+      [
+        'new',
+        'Worker',
+        14,
+        { text: 'REFUND_QUEUE', identifier: 'REFUND_QUEUE' },
+      ],
+      [
+        'assign',
+        'app.locals.currency',
+        15,
+        { text: '<literal>', literal: 'KRW' },
+      ],
+      [
+        'call',
+        'paymentClient.configure',
+        16,
+        {
+          text: '{ apiKey: <literal> }',
+          properties: { apiKey: { text: '<literal>', literal: '<redacted>' } },
+        },
+      ],
+    ]);
+    expect(JSON.stringify(sites)).not.toContain(fakeLiveKey);
+  });
+
+  it('선언·가져오기·내보내기만 있는 파일에는 모듈 심볼을 만들지 않고, 상수·열거형 값은 assign 자리로 낸다', async () => {
+    const { symbols } = await typescriptExtractor().extract(
+      [
+        file(
+          'src/refund/refund.types.ts',
+          `import type { Order } from '../order';
+export interface RefundRequest {
+  order: Order;
+}
+export type RefundId = string;
+export const REFUND_QUEUE = 'refund-requested';
+export enum RefundChannel {
+  Card = 'card',
+  Points,
+}
+export * from './refund.errors';
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(symbols.map((item) => item.symbol)).toEqual([
+      'REFUND_QUEUE',
+      'RefundChannel',
+    ]);
+    expect(bySymbol(symbols, 'REFUND_QUEUE').sites).toEqual([
+      {
+        kind: 'assign',
+        name: 'REFUND_QUEUE',
+        line: 6,
+        args: [{ text: '<literal>', literal: 'refund-requested' }],
+      },
+    ]);
+    expect(bySymbol(symbols, 'RefundChannel').sites).toEqual([
+      {
+        kind: 'assign',
+        name: 'RefundChannel.Card',
+        line: 8,
+        args: [{ text: '<literal>', literal: 'card' }],
+      },
+    ]);
   });
 });

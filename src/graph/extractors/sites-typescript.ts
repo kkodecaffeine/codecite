@@ -268,9 +268,23 @@ export function createTypeScriptSiteReader(
     return found;
   };
 
+  /** 값 하나를 받는 자리. 상수 이름이나 멤버 연쇄가 받는 쪽이다 */
+  const assignSite = (
+    sourceFile: TypeScript.SourceFile,
+    name: string,
+    value: TypeScript.Expression,
+    at: TypeScript.Node,
+  ): CodeSite => ({
+    kind: 'assign',
+    name,
+    line: lineOf(sourceFile, at),
+    args: [argument(sourceFile, value)],
+  });
+
   return {
     sites,
     decoratorSites,
+    assignSite,
     argument: (sourceFile, node) => argument(sourceFile, node),
   };
 }

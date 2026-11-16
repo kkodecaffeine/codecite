@@ -16,6 +16,8 @@ import {
   JAVASCRIPT_ONLY_DIAGNOSTIC_CODES,
   JAVASCRIPT_SOURCE_EXTENSIONS,
   MAX_RELATION_TARGET_LENGTH,
+  MODULE_SYMBOL_KIND,
+  MODULE_SYMBOL_NAME,
   TYPESCRIPT_INSTALL_COMMAND,
   TYPESCRIPT_OMISSION_COMMENT,
   TYPESCRIPT_PARSE_BATCH_SIZE,
@@ -264,10 +266,125 @@ class FileSymbolReader {
   }
 
   read(): ExtractedSymbol[] {
+    const topLevel: TypeScript.Statement[] = [];
     for (const statement of this.sourceFile.statements) {
       this.readStatement(statement);
+      if (this.runsAtTopLevel(statement)) {
+        topLevel.push(statement);
+      }
     }
+    this.readModule(topLevel);
     return this.symbols;
+  }
+
+  /**
+   * 파일을 불러올 때 실행되는 최상위 문장인지. 선언·가져오기·내보내기, 이미 심볼이 된 선언,
+   * require 묶음, CommonJS 내보내기, 'use strict' 같은 지시문은 빼고 라우트 등록·설정 대입 같은 문장만 남긴다
+   */
+  private runsAtTopLevel(statement: TypeScript.Statement): boolean {
+    const ts = this.ts;
+    if (
+      ts.isImportDeclaration(statement) ||
+      ts.isImportEqualsDeclaration(statement) ||
+      ts.isExportDeclaration(statement) ||
+      ts.isExportAssignment(statement) ||
+      ts.isClassDeclaration(statement) ||
+      ts.isFunctionDeclaration(statement) ||
+      ts.isEnumDeclaration(statement) ||
+      ts.isInterfaceDeclaration(statement) ||
+      ts.isTypeAliasDeclaration(statement) ||
+      ts.isModuleDeclaration(statement) ||
+      ts.isEmptyStatement(statement)
+    ) {
+      return false;
+    }
+    if (ts.isVariableStatement(statement)) {
+      // 이름 하나에 묶은 선언은 상수·함수 심볼이 되므로, 풀어 쓰는 선언(`const { port } = loadConfig()`)만 남긴다
+      return statement.declarationList.declarations.some(
+        (declaration) =>
+          !ts.isIdentifier(declaration.name) &&
+          declaration.initializer !== undefined &&
+          this.requiredModule(declaration.initializer) === undefined,
+      );
+    }
+    if (ts.isExpressionStatement(statement)) {
+      return (
+        !ts.isStringLiteral(statement.expression) &&
+        !this.isCommonJsExport(statement)
+      );
+    }
+    return true;
+  }
+
+  /** 최상위 실행 문장을 모아 파일마다 하나인 모듈 심볼로 만든다. 문장이 없으면 만들지 않는다 */
+  private readModule(statements: readonly TypeScript.Statement[]): void {
+    const first = statements.at(0);
+    const last = statements.at(-1);
+    if (!first || !last) {
+      return;
+    }
+    const sourceFile = this.sourceFile;
+    this.addSymbol(first, MODULE_SYMBOL_NAME, MODULE_SYMBOL_KIND, {
+      span: {
+        end: last,
+        content: statements
+          .map((statement) => statement.getText(sourceFile))
+          .join('\n'),
+      },
+      undocumented: true,
+      relations: statements.flatMap((statement) => [
+        ...this.importRelations(statement),
+        ...this.callRelations(statement),
+      ]),
+      facts: this.projector.statementFacts(sourceFile, statements),
+      sites: statements.flatMap((statement) => [
+        ...this.siteReader.sites(sourceFile, statement),
+        ...this.memberAssignSites(statement),
+      ]),
+    });
+  }
+
+  /** 최상위에서 멤버에 값을 넣는 문장(`app.locals.currency = 'KRW'`)의 assign 자리 */
+  private memberAssignSites(statement: TypeScript.Statement): CodeSite[] {
+    const ts = this.ts;
+    if (
+      !ts.isExpressionStatement(statement) ||
+      !ts.isBinaryExpression(statement.expression) ||
+      statement.expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken
+    ) {
+      return [];
+    }
+    const { left, right } = statement.expression;
+    if (
+      !ts.isPropertyAccessExpression(left) &&
+      !ts.isElementAccessExpression(left)
+    ) {
+      return [];
+    }
+    const name = this.projector.callee(left);
+    return name === undefined
+      ? []
+      : [this.siteReader.assignSite(this.sourceFile, name, right, statement)];
+  }
+
+  /** `exports.x = …`, `module.exports.x = …`, `module.exports = …` */
+  private isCommonJsExport(statement: TypeScript.ExpressionStatement): boolean {
+    const ts = this.ts;
+    const expression = statement.expression;
+    if (
+      !ts.isBinaryExpression(expression) ||
+      expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken ||
+      !ts.isPropertyAccessExpression(expression.left)
+    ) {
+      return false;
+    }
+    const target = expression.left.getText(this.sourceFile);
+    const owner = expression.left.expression.getText(this.sourceFile);
+    return (
+      target === 'module.exports' ||
+      owner === 'exports' ||
+      owner === 'module.exports'
+    );
   }
 
   private readStatement(statement: TypeScript.Statement): void {
@@ -308,9 +425,22 @@ class FileSymbolReader {
       return;
     }
     if (ts.isEnumDeclaration(statement)) {
-      this.addSymbol(statement, statement.name.text, 'enum', {
+      const enumName = statement.name.text;
+      this.addSymbol(statement, enumName, 'enum', {
         relations: this.importRelations(statement),
         facts: this.projector.enumFacts(this.sourceFile, statement),
+        sites: statement.members.flatMap((member) =>
+          member.initializer
+            ? [
+                this.siteReader.assignSite(
+                  this.sourceFile,
+                  `${enumName}.${member.name.getText(this.sourceFile)}`,
+                  member.initializer,
+                  member,
+                ),
+              ]
+            : [],
+        ),
       });
       return;
     }
@@ -379,7 +509,10 @@ class FileSymbolReader {
     }
     this.addSymbol(node, name, 'constant', {
       documented,
-      sites: this.siteReader.sites(this.sourceFile, node),
+      sites: [
+        this.siteReader.assignSite(this.sourceFile, name, value, node),
+        ...this.siteReader.sites(this.sourceFile, node),
+      ],
       relations: [...this.importRelations(node), ...this.callRelations(node)],
       facts: this.projector.constantFacts(this.sourceFile, name, value),
     });
@@ -464,7 +597,17 @@ class FileSymbolReader {
         const fn = this.functionLike(member.initializer);
         const symbol = `${name}.${memberName}`;
         this.addSymbol(member, symbol, fn ? 'method' : 'constant', {
-          sites: memberSites(),
+          sites: fn
+            ? memberSites()
+            : [
+                this.siteReader.assignSite(
+                  this.sourceFile,
+                  symbol,
+                  member.initializer,
+                  member,
+                ),
+                ...memberSites(),
+              ],
           relations: memberRelations(),
           facts: fn
             ? this.projector.bodyFacts(this.sourceFile, fn.body)
@@ -478,6 +621,10 @@ class FileSymbolReader {
     }
   }
 
+  /**
+   * 심볼 하나를 더한다. 원문과 줄 범위는 node 에서 읽고, span 이 있으면 node 에서 span.end 까지를 범위로,
+   * span.content 를 원문으로 쓴다(모듈 심볼처럼 떨어진 문장을 모은 경우)
+   */
   private addSymbol(
     node: TypeScript.Node,
     symbol: string,
@@ -487,14 +634,20 @@ class FileSymbolReader {
       facts?: ExecutionFact[];
       sites?: CodeSite[];
       documented?: TypeScript.Node;
+      undocumented?: boolean;
+      span?: { end: TypeScript.Node; content: string };
     },
   ): void {
     const sourceFile = this.sourceFile;
     const start = sourceFile.getLineAndCharacterOfPosition(
       node.getStart(sourceFile),
     );
-    const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
-    const description = this.documentation(details.documented ?? node);
+    const end = sourceFile.getLineAndCharacterOfPosition(
+      (details.span?.end ?? node).getEnd(),
+    );
+    const description = details.undocumented
+      ? undefined
+      : this.documentation(details.documented ?? node);
     const executable = kind === 'function' || kind === 'method';
     const sites = finalizeSites(details.sites ?? []);
     this.symbols.push({
@@ -503,7 +656,7 @@ class FileSymbolReader {
       symbol,
       kind,
       content: boundDeclarationContent(
-        node.getText(sourceFile),
+        details.span?.content ?? node.getText(sourceFile),
         kind,
         TYPESCRIPT_OMISSION_COMMENT,
       ),

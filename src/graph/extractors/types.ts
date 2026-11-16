@@ -48,6 +48,11 @@ export interface TypeScriptFactProjector {
     sourceFile: TypeScript.SourceFile,
     body: TypeScript.ConciseBody,
   ): ExecutionFact[];
+  /** 파일 최상위 문장 묶음의 실행 사실. 함수 본문과 같은 규칙으로 펼친다 */
+  statementFacts(
+    sourceFile: TypeScript.SourceFile,
+    statements: readonly TypeScript.Statement[],
+  ): ExecutionFact[];
   /** 상수 선언의 대입 사실. 객체 리터럴은 속성마다 나눈다 */
   constantFacts(
     sourceFile: TypeScript.SourceFile,
@@ -69,6 +74,13 @@ export interface TypeScriptFactProjector {
 export interface TypeScriptSiteReader {
   /** 노드 안의 모든 호출·생성·데코레이터 자리(콜백 안 포함). 안쪽 클래스는 보지 않는다 */
   sites(sourceFile: TypeScript.SourceFile, node: TypeScript.Node): CodeSite[];
+  /** 값 하나를 받는 자리(상수·열거형 멤버, 최상위 멤버 대입) */
+  assignSite(
+    sourceFile: TypeScript.SourceFile,
+    name: string,
+    value: TypeScript.Expression,
+    at: TypeScript.Node,
+  ): CodeSite;
   /** 노드에 바로 붙은 데코레이터 자리만 */
   decoratorSites(
     sourceFile: TypeScript.SourceFile,
@@ -106,6 +118,8 @@ export interface PythonExtractSettings {
   maxSiteArgumentDepth: number;
   maxSiteArgumentEntries: number;
   maxSiteLiteralLength: number;
+  moduleSymbol: string;
+  moduleKind: string;
 }
 
 export interface PythonExtractRequest {

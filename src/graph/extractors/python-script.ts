@@ -486,6 +486,46 @@ def collect_sites(node):
     return sites
 
 
+def assign_site(name, value, line):
+    return {'kind': 'assign', 'name': name, 'line': line, 'args': [site_argument(value)]}
+
+
+def member_assign_sites(node):
+    # 최상위에서 속성·첨자에 값을 넣는 문장(app.conf.beat_schedule = {...})의 assign 자리
+    if isinstance(node, ast.Assign):
+        targets, value = node.targets, node.value
+    elif isinstance(node, ast.AnnAssign) and node.value is not None:
+        targets, value = [node.target], node.value
+    else:
+        return []
+    sites = []
+    for target in targets:
+        name = relation_name(target) if isinstance(target, (ast.Attribute, ast.Subscript)) else None
+        if name:
+            sites.append(assign_site(name, value, node.lineno))
+    return sites
+
+
+def is_declarative(node):
+    # 모듈 심볼에 넣지 않는 최상위 문장: 가져오기, 정의, 독스트링, 이미 심볼이 된 대입, 선언만 있는 if·try
+    if isinstance(node, (ast.Import, ast.ImportFrom, ast.ClassDef, ast.Pass) + FUNCTION_NODES):
+        return True
+    if isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+        return True
+    if isinstance(node, ast.AnnAssign) and node.value is None:
+        return True
+    if assignment_parts(node)[0] is not None:
+        return True
+    if isinstance(node, ast.If):
+        return all(is_declarative(item) for item in node.body + node.orelse)
+    if isinstance(node, TRY_NODES):
+        bodies = node.body + node.orelse + node.finalbody
+        for handler in node.handlers:
+            bodies = bodies + handler.body
+        return all(is_declarative(item) for item in bodies)
+    return False
+
+
 def import_target(specifier, imported):
     return (imported or S['wholeModuleImport']) + S['importSeparator'] + specifier
 
@@ -569,7 +609,34 @@ class FileReader:
                 name, value = assignment_parts(node)
                 if name is not None:
                     self.add_value(node, name, value)
+        self.read_module()
         return self.symbols
+
+    def read_module(self):
+        # 파일을 불러올 때 실행되는 최상위 문장을 모아 파일마다 하나인 모듈 심볼로 만든다
+        statements = [node for node in self.tree.body if not is_declarative(node)]
+        if not statements:
+            return
+        relations = []
+        sites = []
+        for node in statements:
+            relations += self.import_relations(node) + self.call_relations(node)
+            sites += collect_sites(node) + member_assign_sites(node)
+        facts = Facts()
+        facts.block(statements, [], False)
+        start = self.segment(statements[0])[0]
+        symbol = {
+            'symbol': S['moduleSymbol'],
+            'kind': S['moduleKind'],
+            'lineStart': start,
+            'lineEnd': max(statements[-1].end_lineno or start, start),
+            'content': '\n'.join(self.segment(node)[1] for node in statements),
+            'relations': relations,
+            'facts': facts.items,
+        }
+        if sites:
+            symbol['sites'] = sites
+        self.symbols.append(symbol)
 
     def read_class(self, node):
         decorators = decorator_names(node)
@@ -582,6 +649,7 @@ class FileReader:
         relations += [{'type': 'DECORATED_BY', 'symbol': name} for name in decorators]
         relations += self.inject_relations(node)
         facts = None
+        sites = decorator_sites(node)
         if kind == 'enum':
             facts = []
             for member in node.body:
@@ -589,7 +657,8 @@ class FileReader:
                 if name is not None:
                     facts.append({'line': member.lineno, 'kind': 'assigns',
                                   'subject': node.name + '.' + name, 'value': value_text(value)})
-        self.add(node, node.name, kind, relations, facts, decorator_sites(node))
+                    sites.append(assign_site(node.name + '.' + name, value, member.lineno))
+        self.add(node, node.name, kind, relations, facts, sites)
         for member in node.body:
             if isinstance(member, FUNCTION_NODES):
                 names = [leaf(name) for name in decorator_names(member)]
@@ -620,7 +689,7 @@ class FileReader:
             return
         facts = [{'line': node.lineno, 'kind': 'assigns', 'subject': name, 'value': value_text(value)}]
         self.add(node, name, 'constant', self.import_relations(node) + self.call_relations(value), facts,
-                 collect_sites(node))
+                 [assign_site(name, value, node.lineno)] + collect_sites(node))
 
     def function_relations(self, node):
         relations = self.import_relations(node)

@@ -125,7 +125,7 @@ export interface ExtractedSymbol {
   filePath: string;
   language: string;
   symbol: string;
-  /** function, method, class, constant, enum, controller, entity, schema 등 */
+  /** function, method, class, constant, enum, controller, entity, schema, module(파일 최상위 문장 묶음) 등 */
   kind: string;
   content: string;
   lineStart: number;
@@ -170,8 +170,12 @@ export interface CodeSite {
   args: CodeSiteArgument[];
 }
 
-/** call: 함수 호출, new: 생성자 호출, decorator: 데코레이터(인자가 있으면 그 인자까지) */
-export type CodeSiteKind = 'call' | 'new' | 'decorator';
+/**
+ * call: 함수 호출, new: 생성자 호출, decorator: 데코레이터(인자가 있으면 그 인자까지)
+ * assign: 상수·열거형 멤버의 값과 파일 최상위에서 멤버에 넣는 값(설정 등록). name 은 받는 쪽, args 는 값 하나다
+ * 함수 안의 대입은 실행 사실이 맡으므로 assign 자리로 내지 않는다
+ */
+export type CodeSiteKind = 'call' | 'new' | 'decorator' | 'assign';
 
 /**
  * 자리의 인자 하나. text 말고는 읽을 수 있을 때만 채운다
