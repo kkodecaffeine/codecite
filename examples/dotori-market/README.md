@@ -35,7 +35,7 @@ npx codecite index
 npx codecite ask "적립금은 언제 사라져요?"
 ```
 
-`OPENAI_API_KEY` 가 없으면 답변 모델과 임베딩 없이 BM25 검색과 결정적 답변만으로 돕니다. 키가 있으면 설정의 OpenAI 모델로 하이브리드 검색과 답변 생성을 씁니다.
+`OPENAI_API_KEY` 가 없으면 답변 모델과 임베딩 없이 BM25 검색과 결정적 답변만으로 돕니다. 키를 쓰려면 `codecite.config.json` 의 `llm.model` 과 `embedding.model` 에 쓸 모델 이름을 적습니다. codecite 는 모델 기본값을 두지 않습니다. 그러면 하이브리드 검색과 답변 생성을 씁니다.
 
 ```bash
 OPENAI_API_KEY=... npx codecite ask "VIP 등급이면 배송비 안 내도 돼?"
