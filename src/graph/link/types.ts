@@ -85,3 +85,9 @@ export interface CoverageInput {
   providers: ReadonlySet<string>;
   maxUnresolvedRatio?: number;
 }
+
+/** 사람이 읽는 보고서 글의 선택 */
+export interface FormatGraphReportOptions {
+  /** 까닭마다 보일 못 이은 항목 수. 나머지는 수만 적는다 */
+  itemsPerReason?: number;
+}

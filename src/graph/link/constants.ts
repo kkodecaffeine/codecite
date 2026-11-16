@@ -4,7 +4,7 @@ import type {
   CrossRepositoryRelation,
   RelationConfidence,
 } from '../../extensions/code-knowledge.js';
-import type { DetectionKind } from '../types.js';
+import type { DetectionKind, UnresolvedReason } from '../types.js';
 
 /**
  * 실행이 이어지는 관계. 부르는(발행하는) 쪽과 처리하는 쪽이 있어 조건·예외 실행 사실과 handlerChain 을 단다
@@ -132,3 +132,34 @@ export const MANUAL_LINK_END_KEYS: readonly string[] = [
 export const PACKAGE_ENTRY_FOLDERS: readonly string[] = ['.', 'src', 'lib'];
 /** 못 이은 비율을 남길 때 소수 자리 */
 export const UNRESOLVED_RATIO_DIGITS = 4;
+
+/** 사람이 읽는 보고서에서 까닭마다 보이는 못 이은 항목 수 기본값 */
+export const REPORT_DEFAULT_ITEMS_PER_REASON = 20;
+/** 사람이 읽는 보고서의 까닭별 뜻과 다음 할 일 */
+export const REPORT_REASON_GUIDE: Readonly<
+  Record<UnresolvedReason, { meaning: string; next: string }>
+> = {
+  'no-provider': {
+    meaning:
+      'a call or import found no route, resolver, subscriber or symbol to land on',
+    next: 'register the target repository, enable its preset, or add a proxy or package hint',
+  },
+  'ambiguous-provider': {
+    meaning:
+      'several handlers match, or the path or name is too generic to pick one',
+    next: 'narrow the target with a baseUrls, proxyPrefixes or graphqlSchemas hint',
+  },
+  'dynamic-target': {
+    meaning: 'the address or queue name is decided at runtime',
+    next: 'add a manual link with the code line as evidence, or leave it',
+  },
+  external: {
+    meaning: 'the call goes to an outside service listed in hints.external',
+    next: 'nothing',
+  },
+  'no-caller': {
+    meaning:
+      'a route, resolver or subscriber has no caller in the registered repositories',
+    next: 'register the calling repository, or accept it as called from outside',
+  },
+};

@@ -368,3 +368,4 @@ export {
   parseManualLinks,
   readManualLinks,
 } from './manual.js';
+export { formatGraphReport, readGraphReport } from './report.js';

@@ -58,13 +58,16 @@ export {
 export {
   buildCrossRepositoryGraph,
   buildGraphReport,
+  formatGraphReport,
   ManualLinkError,
   parseManualLinks,
+  readGraphReport,
   readManualLinks,
 } from './link/index.js';
 export type {
   BuildCrossRepositoryOptions,
   CrossRepositoryBuild,
+  FormatGraphReportOptions,
   ManualLinkSet,
 } from './link/types.js';
 export { buildCodeGraph } from './pipeline.js';
