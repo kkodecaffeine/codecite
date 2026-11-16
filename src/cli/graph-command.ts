@@ -145,7 +145,7 @@ export const graphBuildCommand: CliLeafCommand = {
       0,
     );
     context.io.stdout(
-      `${formatTable(rows)}Links: ${links}, unresolved: ${result.report.unresolved.length} (see "codecite graph report")\nWrote ${result.files.length} files to ${displayPath(context.cwd, result.output)} in ${(result.durationMs / 1000).toFixed(1)}s\n`,
+      `${formatTable(rows)}Links: ${links}, unresolved: ${result.report.unresolved.length} (see "codecite graph report")\nWrote ${result.files.length} files to ${displayPath(context.io.cwd, result.output)} in ${(result.durationMs / 1000).toFixed(1)}s\n`,
     );
     return EXIT_OK;
   },
@@ -180,7 +180,7 @@ export const graphReportCommand: CliLeafCommand = {
     const report = await graph.readGraphReport(config.output);
     if (!report) {
       throw new Error(
-        `report.json was not found in ${displayPath(context.cwd, config.output)}; run "codecite graph build" first.`,
+        `report.json was not found in ${displayPath(context.io.cwd, config.output)}; run "codecite graph build" first.`,
       );
     }
     context.io.stdout(
@@ -221,7 +221,7 @@ export const graphValidateCommand: CliLeafCommand = {
       ...result.warnings.map(
         (issue) => `warning  ${issue.check}  ${issue.file}: ${issue.message}`,
       ),
-      `${result.ok ? 'OK' : 'FAILED'}: ${result.errors.length} errors, ${result.warnings.length} warnings in ${displayPath(context.cwd, config.output)}`,
+      `${result.ok ? 'OK' : 'FAILED'}: ${result.errors.length} errors, ${result.warnings.length} warnings in ${displayPath(context.io.cwd, config.output)}`,
     ];
     context.io.stdout(`${lines.join('\n')}\n`);
     return result.ok ? EXIT_OK : EXIT_FAILURE;
@@ -404,8 +404,9 @@ function rejectPositionals(context: CliContext): void {
 }
 
 function displayPath(cwd: string, path: string): string {
+  // 명령을 실행한 폴더 기준 상대 경로. 다른 드라이브처럼 상대 경로가 없으면 그대로 보인다
   const rel = relative(cwd, path);
-  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : path;
+  return rel && !isAbsolute(rel) ? rel : path;
 }
 
 /** 칸 너비를 맞춘 표. 빈 칸은 줄 끝 공백을 남기지 않는다 */
