@@ -46,11 +46,13 @@ import {
   TYPEORM_GENERATED_COLUMN_DECORATOR,
   TYPEORM_GET_REPOSITORY,
   TYPEORM_INJECT_REPOSITORY_DECORATOR,
+  TYPEORM_LOCAL_BUILDER_WRITE,
   TYPEORM_JOIN_COLUMN_DECORATOR,
   TYPEORM_MANAGER_RECEIVERS,
   TYPEORM_PRESET_NAME,
   TYPEORM_QUERY_BUILDER,
   TYPEORM_READ_METHODS,
+  TYPEORM_REPOSITORY_NAME_PATTERN,
   TYPEORM_RELATION_DECORATORS,
   TYPEORM_REPOSITORY_TYPES,
   TYPEORM_SINGLE_RESULT_METHODS,
@@ -228,6 +230,21 @@ function collect(
   for (const site of sites) {
     const operation = leafName(site.name);
     const receiver = receiverOf(site.name);
+    const local = localBuilderWrite(symbol, sites, site);
+    if (local) {
+      writes.push(local.write);
+      if (local.write.entity) {
+        accesses.push({
+          site: local.step,
+          entity: local.write.entity,
+          kind: 'entity-write',
+          operation: leafName(local.step.name),
+          via: `${TYPEORM_QUERY_BUILDER}(…)`,
+          confidence: TYPEORM_CONFIDENCE.builderAccess,
+        });
+      }
+      continue;
+    }
     if (
       receiver === undefined ||
       site.name.includes(`${TYPEORM_QUERY_BUILDER}().`)
@@ -249,7 +266,8 @@ function collect(
     const managed = repository
       ? undefined
       : managerBinding(symbol, receiver, site, context);
-    const binding = repository ?? managed;
+    const binding: LooseBinding | undefined =
+      repository ?? managed ?? namedRepositoryBinding(symbol, receiver);
     if (!binding) {
       continue;
     }
@@ -258,14 +276,16 @@ function collect(
     if (!read && !write && operation !== TYPEORM_CREATE_METHOD) {
       continue;
     }
-    accesses.push({
-      site,
-      entity: binding.entity,
-      kind: read ? 'entity-read' : 'entity-write',
-      operation,
-      via: binding.via,
-      confidence: binding.confidence,
-    });
+    if (binding.entity) {
+      accesses.push({
+        site,
+        entity: binding.entity,
+        kind: read ? 'entity-read' : 'entity-write',
+        operation,
+        via: binding.via,
+        confidence: binding.confidence,
+      });
+    }
     // 매니저 호출은 첫 인자가 엔티티라 필드 인자가 하나 뒤에 있다
     const shift = managed ? 1 : 0;
     const fieldIndex = TYPEORM_FIELD_ARGUMENT[operation];
@@ -274,7 +294,7 @@ function collect(
     if (fields && (fields.properties || fields.elements)) {
       writes.push({
         site,
-        entity: binding.entity,
+        ...(binding.entity ? { entity: binding.entity } : {}),
         fields,
         writeKind: 'update-call',
         confidence: TYPEORM_CONFIDENCE.fieldWrite,
@@ -286,7 +306,7 @@ function collect(
     if (counter && field && amount) {
       writes.push({
         site,
-        entity: binding.entity,
+        ...(binding.entity ? { entity: binding.entity } : {}),
         fields: { text: amount.text, properties: { [field]: amount } },
         writeKind: 'update-call',
         confidence: TYPEORM_CONFIDENCE.fieldWrite,
@@ -295,6 +315,73 @@ function collect(
     }
   }
   return { accesses, writes };
+}
+
+/** 엔티티를 모를 수도 있는 저장소 연결. 이름으로만 저장소라고 본 받는 쪽은 엔티티를 비운다 */
+type LooseBinding = Omit<EntityBinding, 'entity'> & { entity?: string };
+
+/**
+ * 연결을 못 찾은 받는 쪽이 저장소 이름(`goodsRepository`)이면 저장소로 본다
+ * 같은 심볼 안에 `goodsRepository: Repository<Goods>` 타입 표기가 있으면 엔티티를 읽고, 없으면 비운다
+ */
+function namedRepositoryBinding(
+  symbol: ExtractedSymbol,
+  receiver: string,
+): LooseBinding | undefined {
+  const name = leafName(receiver);
+  if (!TYPEORM_REPOSITORY_NAME_PATTERN.test(name)) {
+    return undefined;
+  }
+  const typed = new RegExp(
+    `\\b${name}\\s*\\??\\s*:\\s*(?:${TYPEORM_REPOSITORY_TYPES.join('|')})\\s*<\\s*([A-Z][\\w$]*)\\s*>`,
+  ).exec(symbol.content);
+  return {
+    ...(typed ? { entity: typed[1] } : {}),
+    via: typed ? `${name}: ${typed[0].split(/:\s*/)[1]}` : name,
+    confidence: typed
+      ? TYPEORM_CONFIDENCE.boundAccess
+      : TYPEORM_CONFIDENCE.builderAccess,
+  };
+}
+
+/**
+ * 쿼리 빌더를 담은 지역 변수에서 이어지는 쓰기(`const qb = …createQueryBuilder(); qb.update(X).set({…})`)
+ * 그 변수가 createQueryBuilder() 결과라는 대입 사실이 있을 때만 본다. 대상은 update(X)·insert().into(X) 인자에서 읽는다
+ */
+function localBuilderWrite(
+  symbol: ExtractedSymbol,
+  sites: readonly CodeSite[],
+  site: CodeSite,
+): { write: FieldWriteSource; step: CodeSite } | undefined {
+  const match = TYPEORM_LOCAL_BUILDER_WRITE.exec(site.name);
+  const fields = site.args[0];
+  if (!match || !fields || !(fields.properties || fields.elements)) {
+    return undefined;
+  }
+  const [, local, operation] = match;
+  const builder = (symbol.executionFacts ?? []).some(
+    (fact) =>
+      fact.kind === 'assigns' &&
+      fact.subject === local &&
+      (fact.value ?? '').includes(`${TYPEORM_QUERY_BUILDER}(`),
+  );
+  const step = sites.find(
+    (candidate) => candidate.name === `${local}.${operation}`,
+  );
+  if (!builder || !step) {
+    return undefined;
+  }
+  const entity = builderEntityArgument(step.args[0]);
+  return {
+    step,
+    write: {
+      site,
+      ...(entity ? { entity } : {}),
+      fields,
+      writeKind: 'update-builder',
+      confidence: TYPEORM_CONFIDENCE.fieldWrite,
+    },
+  };
 }
 
 /** 받는 쪽이 가리키는 저장소의 엔티티 */

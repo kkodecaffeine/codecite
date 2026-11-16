@@ -125,6 +125,11 @@ export const TYPEORM_BUILDER_ENTITY_STEPS: readonly string[] = [
 ];
 /** 쿼리 빌더 단계에 문자열로 준 테이블 이름(`update('members')`)으로 볼 글자 */
 export const TYPEORM_TABLE_NAME_PATTERN = /^[A-Za-z_][\w.]*$/;
+/** 연결을 못 찾은 받는 쪽이라도 이 이름으로 끝나면 저장소로 본다(`goodsRepository.update(…)`). 대상 엔티티는 타입 표기가 있을 때만 읽는다 */
+export const TYPEORM_REPOSITORY_NAME_PATTERN = /(?:^|[a-z_])repository$/i;
+/** 쿼리 빌더를 담은 지역 변수에서 이어지는 쓰기 단계(`queryBuilder.update(X).set({…})`) */
+export const TYPEORM_LOCAL_BUILDER_WRITE =
+  /^([A-Za-z_$][\w$]*)\.(update|insert)\(\)\.(set|values)$/;
 /** 사용자 저장소 클래스를 표시하는 데코레이터(`@EntityRepository(Order)`) */
 export const TYPEORM_ENTITY_REPOSITORY_DECORATOR = 'EntityRepository';
 /** 바꿀 필드 묶음을 받는 쿼리 빌더 단계 */

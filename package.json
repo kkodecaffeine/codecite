@@ -1,6 +1,6 @@
 {
   "name": "codecite",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "정책 claim 을 근거로 답하고 출처를 붙이는 한국어 정책 에이전트",
   "license": "Apache-2.0",
   "author": "Suh Junho",

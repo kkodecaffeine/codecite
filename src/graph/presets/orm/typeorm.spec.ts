@@ -366,6 +366,41 @@ export class ReviewStatRepository extends Repository<ReviewStat> {
     ]);
   });
 
+  it('reads builder writes through a local builder and updates through repository-named parameters', async () => {
+    const symbols = await extract({
+      'src/voucher/voucher.service.ts': `export class VoucherService {
+  constructor(private readonly dataSource: DataSource) {}
+
+  async expire(seqs: number[], manager?: EntityManager) {
+    const queryBuilder = (manager ?? this.dataSource).createQueryBuilder();
+    await queryBuilder.update(Voucher).set({ expireDate: today }).whereInIds(seqs).execute();
+  }
+}
+`,
+      'src/scripts/sync-goods.ts': `export const closeGoods = async (goodsRepository: Repository<Goods>, seqs: number[]) => {
+  await goodsRepository.update(seqs, { openFlag: false });
+  await cache.update(seqs, { openFlag: false });
+};
+`,
+    });
+    const writes = detectAll(symbols, contextFor(symbols))
+      .filter((item) => item.kind === 'field-write')
+      .map(
+        (item) =>
+          item.kind === 'field-write' && [
+            item.symbol,
+            item.entity,
+            item.field,
+            item.writeKind,
+          ],
+      );
+
+    expect(writes).toEqual([
+      ['closeGoods', 'Goods', 'openFlag', 'update-call'],
+      ['VoucherService.expire', 'Voucher', 'expireDate', 'update-builder'],
+    ]);
+  });
+
   it('ignores map and array calls, comments and strings', async () => {
     const symbols = await extract(FILES);
     const reconcile = detectAll(symbols, contextFor(symbols)).filter(
