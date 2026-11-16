@@ -108,46 +108,33 @@ export const MODULE_LOADER_CALLEES: readonly string[] = ['require', 'import'];
 export const MAX_SITE_LITERAL_LENGTH = 500;
 
 /**
- * 자리 인자 값의 비밀값 가리기. 파이프라인의 원문 가리기와 따로, 추출기를 떠나는 값만 본다
- * 맞은 부분은 REDACTED_PLACEHOLDER 로 바꾸고, 주소의 사용자 정보는 그 부분만 바꿔 경로는 남긴다
+ * 자리 인자 값의 비밀값 가리기. 알려진 토큰 형식과 비밀값 이름 낱말은 ../constants.ts 의 목록 하나를 함께 쓰고,
+ * 여기에는 값 하나를 볼 때만 필요한 규칙과 기준값을 둔다
+ * 표시는 자리의 text 가 쓰는 `<literal>`·`<env>` 와 같은 꼴로 맞춘다(원문 가리기의 표시와는 쓰는 곳이 다르다)
  */
 export const REDACTED_PLACEHOLDER = '<redacted>';
-/** 잘 알려진 토큰 머리말(결제·저장소·메신저·클라우드 키, JWT, 개인 키, 인증 머리) */
-export const SECRET_TOKEN_PATTERNS: readonly RegExp[] = [
-  /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}/g,
-  /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
-  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
-  /\bxox[abposr]-[A-Za-z0-9-]{10,}/g,
-  /\bAKIA[0-9A-Z]{16}\b/g,
-  /\bAIza[0-9A-Za-z_-]{30,}/g,
-  /\bsk-[A-Za-z0-9_-]{20,}/g,
-  /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
-  /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{16,}/g,
-];
-/** `scheme://사용자:비밀번호@` 의 사용자 정보 */
+/** 인증 머리글 값(`Bearer …`). 원문 가리기는 이 꼴을 모듈 안에만 두어 같은 규칙을 여기 둔다 */
+export const SITE_AUTHORIZATION_PATTERN =
+  /\b(?:Bearer|Basic|Token)\s+[A-Za-z0-9._~+/=-]{16,}/g;
+/** 값 안의 개인 키 블록. 자리 값은 길이 한도로 잘려 END 줄이 없을 수 있어 끝까지 가린다 */
+export const SITE_PRIVATE_KEY_PATTERN =
+  /-{5}BEGIN [A-Z0-9 ]{0,40}PRIVATE KEY-{5}[\s\S]*?(?:-{5}END [A-Z0-9 ]{0,40}PRIVATE KEY-{5}|$)/g;
+/** `scheme://사용자:비밀번호@` 의 사용자 정보. 호스트와 경로는 연결에 쓰므로 이 부분만 바꾼다 */
 export const URL_USERINFO_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/)[^/\s@]+@/gi;
-/** 32 자 이상 이어진 16 진수 */
+/**
+ * 32 자 이상 이어진 16 진수. 원문 가리기는 이름 없는 해시를 남기지만, 자리 인자는 이름 없이 위치로만 넘기는 값이 많아
+ * 이름 규칙이 닿지 않는다. 16 진수 덩어리는 탐지(경로·큐 이름 맞추기)에 쓸 일이 없어 가려도 잃는 것이 없다
+ */
 export const HEX_RUN_PATTERN = /\b[0-9a-f]{32,}\b/gi;
-/** 무작위처럼 보이는지 따져 볼 글자 묶음. 이름·경로와 가르려고 글자 종류가 바뀌는 비율과 엔트로피를 함께 본다 */
+/**
+ * 값 안에서 무작위처럼 보이는지 따져 볼 글자 묶음. 원문 가리기는 따옴표 안 문자열 전체를 보지만(32 자, 엔트로피 4),
+ * 자리 값은 주소·머리글 안에 섞인 묶음을 찾아야 해 더 짧은 묶음(24 자)을 본다. 24 자 무작위 문자열은 엔트로피가
+ * 4 에 못 미치는 일이 잦아 엔트로피 기준을 3.5 로 낮추고, 대신 글자 종류가 바뀌는 비율로 이름·경로와 가른다
+ * (긴 낙타 표기·밑줄·하이픈 이름은 0.36 아래, 무작위 문자열은 대부분 0.4 위)
+ */
 export const RANDOM_RUN_PATTERN = /[A-Za-z0-9_+/=-]{24,}/g;
 export const RANDOM_RUN_MIN_CLASS_CHANGE_RATIO = 0.4;
 export const RANDOM_RUN_MIN_ENTROPY = 3.5;
-/** 이 낱말이 들어간 키(대소문자·`_`·`-` 무시) 아래의 값은 모양과 상관없이 가린다 */
-export const SECRET_KEY_WORDS: readonly string[] = [
-  'token',
-  'secret',
-  'password',
-  'passwd',
-  'apikey',
-  'accesskey',
-  'privatekey',
-  'credential',
-  'authorization',
-  'cookie',
-  'signature',
-  'sessionid',
-];
 
 /** IMPORTS 대상에서 가져온 꼴과 모듈 지정자를 가르는 말, 그리고 이름 없이 모듈 전체를 읽을 때 쓰는 가져온 꼴 */
 export const IMPORT_TARGET_SEPARATOR = ' from ';

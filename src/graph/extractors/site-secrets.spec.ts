@@ -74,13 +74,48 @@ describe('isSecretKeyName', () => {
     ]) {
       expect(isSecretKeyName(name)).toBe(true);
     }
-    for (const name of ['memberId', 'method', 'queue', 'author']) {
+    // 마지막 낱말만 본다: 비밀값을 설명하는 이름의 값(안내 문구, 종류)은 남긴다
+    for (const name of [
+      'memberId',
+      'method',
+      'queue',
+      'author',
+      'passwordHint',
+      'tokenType',
+    ]) {
       expect(isSecretKeyName(name)).toBe(false);
     }
   });
 });
 
 describe('redactSiteSecrets', () => {
+  it('키·솔트 이름 아래의 값은 무작위처럼 보일 때만 가린다', () => {
+    const fakeSalt = '0123456789abcdef'.slice(0, 16);
+    const [site] = redactSiteSecrets([
+      {
+        kind: 'call',
+        name: 'pointCache.set',
+        line: 1,
+        args: [
+          {
+            text: '{ key: <literal>, cacheKey: <literal>, salt: <literal> }',
+            properties: {
+              key: { text: '<literal>', literal: 'coupon-list' },
+              cacheKey: { text: '<literal>', literal: 'points:daily' },
+              salt: { text: '<literal>', literal: fakeSalt },
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(site.args[0].properties).toEqual({
+      key: { text: '<literal>', literal: 'coupon-list' },
+      cacheKey: { text: '<literal>', literal: 'points:daily' },
+      salt: { text: '<literal>', literal: '<redacted>' },
+    });
+  });
+
   it('비밀값 키 아래의 값은 모양과 상관없이 가리고, 이름과 가린 원문은 그대로 둔다', () => {
     const sites: CodeSite[] = [
       {
