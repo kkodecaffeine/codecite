@@ -24,3 +24,45 @@ export const LLM_DEFAULT_MAX_OUTPUT_TOKENS = 2_048;
 export const HTTP_ERROR_CODE_PATTERN = /^[A-Za-z0-9_.-]{1,64}$/;
 /** 비밀값이 없는 로컬 서버의 오류 글을 보여 줄 때 자르는 길이 */
 export const HTTP_ERROR_TEXT_MAX_CHARS = 200;
+
+/** claim CSV 에 꼭 있어야 하는 열. 열이 없거나 행의 값이 비면 행 번호와 함께 실패한다 */
+export const CLAIM_CSV_REQUIRED_COLUMNS = [
+  'policy_group',
+  'feature_name',
+  'claim_statement',
+] as const;
+
+/** claim CSV 가 읽는 열. 여기에 없는 열은 무시한다 */
+export const CLAIM_CSV_COLUMNS = [
+  ...CLAIM_CSV_REQUIRED_COLUMNS,
+  'claim_facet',
+  'claim_id',
+  'claim_confidence',
+  'claim_conditions',
+  'claim_exceptions',
+  'claim_value',
+  'user_question_examples',
+  'search_aliases',
+  'context_text',
+  'source',
+] as const;
+
+/** `claim_confidence` 가 받는 값. 비우면 high 다 */
+export const CLAIM_CSV_CONFIDENCES = ['high', 'low'] as const;
+
+/**
+ * CSV 한 행을 정책 글로 펼칠 때 쓰는 섹션 머리
+ * 기능은 조각 머리에 함께 두는 섹션, 질문 예시·검색 표현은 검색 글에만 붙는 섹션이다(`domain/constants.ts`)
+ */
+export const CLAIM_CSV_HEADINGS = Object.freeze({
+  conditions: '적용 조건',
+  exceptions: '예외',
+  value: '값',
+  feature: '기능',
+  questionExamples: '질문 예시',
+  searchAliases: '검색 표현',
+});
+
+/** 색인 캐시 파일 위치(현재 폴더 기준)와 파일 형식 판. 형식이 바뀌면 판을 올려 예전 캐시를 버린다 */
+export const DEFAULT_INDEX_CACHE_PATH = '.codecite/index.json';
+export const INDEX_CACHE_FORMAT_VERSION = 1;

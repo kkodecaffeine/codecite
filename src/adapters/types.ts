@@ -1,3 +1,7 @@
+import type { PolicyChunk } from '../domain/policy-chunk.js';
+import type { Logger } from '../ports.js';
+import type { CLAIM_CSV_COLUMNS } from './constants.js';
+
 /** `openAiClient` 옵션. 키는 옵션이나 `OPENAI_API_KEY` 에서만 읽는다 */
 export interface OpenAiClientOptions {
   /** 없으면 `OPENAI_API_KEY` 를 읽는다. baseUrl 을 바꾼 호환 서버면 키 없이도 쓴다 */
@@ -67,4 +71,41 @@ export interface OllamaChatResponse {
 /** Ollama `/api/embed` 응답 중 읽는 부분 */
 export interface OllamaEmbedResponse {
   embeddings?: unknown;
+}
+
+/** `csvPolicySource` 옵션 */
+export interface CsvPolicySourceOptions {
+  /** claim CSV 파일, 또는 `.csv` 파일을 담은 폴더(바로 아래 파일만 이름 순서로 읽는다) */
+  path: string;
+}
+
+/** CSV 기록 하나. row 는 머리 행을 1 로 센 기록 번호, line 은 그 기록이 시작하는 줄 번호다 */
+export interface CsvRecord {
+  cells: string[];
+  row: number;
+  line: number;
+}
+
+/** claim CSV 가 읽는 열 이름 */
+export type ClaimCsvColumn = (typeof CLAIM_CSV_COLUMNS)[number];
+
+/** `jsonIndexCache` 옵션 */
+export interface JsonIndexCacheOptions {
+  /** 캐시 파일 경로. 없으면 `.codecite/index.json` */
+  path?: string;
+  logger?: Logger;
+}
+
+/** 색인 캐시 한 벌. vectors[i] 는 chunks[i].searchText 의 벡터다 */
+export interface CachedIndex {
+  fingerprint: string;
+  chunks: PolicyChunk[];
+  vectors: number[][];
+}
+
+/** `vectorsFor` 결과. reused 면 캐시의 벡터를 그대로 썼다 */
+export interface CachedVectors {
+  fingerprint: string;
+  vectors: number[][];
+  reused: boolean;
 }
