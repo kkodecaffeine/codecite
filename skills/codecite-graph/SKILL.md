@@ -17,7 +17,7 @@ description: 여러 저장소의 호출·큐·이벤트·데이터 관계 그래
 ## 준비
 
 - Node 22.13 이상, `git`.
-- TypeScript·JavaScript 저장소가 있으면 `typescript` 를 함께 설치한다(`npm i -D codecite typescript`).
+- codecite 를 설치한다(`npm i -D git+https://github.com/kkodecaffeine/codecite.git#v0.1.0`). TypeScript·JavaScript 저장소가 있으면 `typescript` 도 설치한다(`npm i -D typescript`).
 - Python 저장소가 있으면 `python3` 이 있어야 한다.
 - 저장소마다 읽기 권한이 있는 주소나 받아 둔 경로가 있어야 한다.
 

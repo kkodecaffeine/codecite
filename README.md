@@ -21,6 +21,16 @@ node ../../dist/cli.js ask "적립금은 언제 사라져요?"
 
 예제는 가상의 온라인 쇼핑몰 "도토리 마켓"의 정책입니다. API 키가 없으면 답변 모델 없이 BM25 검색과 결정적 답변으로 돕니다.
 
+## 설치
+
+아직 npm 에 배포하지 않았습니다. GitHub 태그로 판을 고정해 설치합니다. 설치할 때 패키지가 스스로 빌드합니다.
+
+```bash
+npm i -D git+https://github.com/kkodecaffeine/codecite.git#v0.1.0
+```
+
+설치한 프로젝트 안에서는 아래 예시의 `npx codecite …` 가 그대로 돕니다. ESM 과 CommonJS(`require('codecite')`, `require('codecite/graph')`) 양쪽에서 불러올 수 있습니다.
+
 ## 답변 엔진
 
 ### 정책 데이터
@@ -88,7 +98,7 @@ const result = await codecite.ask('적립금은 언제 사라져요?');
 ### 준비
 
 - `git` 과 저장소 읽기 권한.
-- TypeScript·JavaScript 저장소가 있으면 `typescript` 를 함께 설치합니다: `npm i -D codecite typescript`.
+- TypeScript·JavaScript 저장소가 있으면 [설치](#설치)한 codecite 옆에 `typescript` 도 설치합니다: `npm i -D typescript`.
 - Python 저장소가 있으면 `python3` 이 `PATH` 에 있어야 합니다.
 
 codecite 는 개발자의 작업 트리를 읽지 않습니다. 저장소마다 원격 기본 브랜치의 끝 커밋을 임시 폴더에 따로 꺼내 읽고, 원본 저장소에는 아무것도 쓰지 않습니다. `.env*`, `*.csv*`, 비밀 키 파일은 설정과 상관없이 늘 뺍니다. 코드 안의 비밀값 모양 리터럴은 저장하기 전에 가립니다.
