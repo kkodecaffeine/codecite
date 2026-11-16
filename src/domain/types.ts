@@ -117,10 +117,6 @@ export interface PolicyChunkProps {
   source: string;
   contextKind?: PolicyContextKind;
   searchText?: string;
-  symbol?: string;
-  sourceFile?: string;
-  lineStart?: number;
-  relationTargets?: string[];
   policyGroup?: string;
   policyClaims?: PolicyClaimProps[];
 }

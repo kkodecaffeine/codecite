@@ -38,8 +38,6 @@ describe('PolicyChunk', () => {
     expect(chunk.policyClaims).toEqual([
       { ...claim, provenanceChunkIds: ['policies.csv#row-3#POINTS-002'] },
     ]);
-    expect(chunk.symbol).toBeUndefined();
-    expect(chunk.relationTargets).toEqual([]);
   });
 
   it('기술 조각에는 claim 을 싣지 않는다', () => {
@@ -52,33 +50,6 @@ describe('PolicyChunk', () => {
     expect(chunk.id).toBe('policies.csv#row-3#POINTS-002#technical');
     expect(chunk.policyClaims).toEqual([]);
     expect(chunk.searchText).toBe('[API]\n- POST /points/expire');
-  });
-
-  it('코드 심볼 문서에서 심볼·위치·관계 대상을 읽는다', () => {
-    const chunk = PolicyChunk.fromPolicy(policy, {
-      contextKind: 'technical',
-      text: [
-        '[심볼]',
-        'PointExpiryJob.run',
-        '',
-        '[구조]',
-        '- 위치: src/points/point-expiry.job.ts:12-40',
-        '',
-        '[관계]',
-        '- CALLS: PointLedger.expire',
-        '- CALLS: PointLedger.expire',
-        '- READS: point_ledger',
-      ].join('\n'),
-      searchText: 'PointExpiryJob.run',
-    });
-
-    expect(chunk.symbol).toBe('PointExpiryJob.run');
-    expect(chunk.sourceFile).toBe('src/points/point-expiry.job.ts');
-    expect(chunk.lineStart).toBe(12);
-    expect(chunk.relationTargets).toEqual([
-      'PointLedger.expire',
-      'point_ledger',
-    ]);
   });
 
   it('조각 종류가 없던 예전 조각은 정책으로 읽되 메타데이터가 없다고 알린다', () => {

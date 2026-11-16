@@ -17,7 +17,6 @@ export class PolicyChunk {
   ): PolicyChunk {
     const policyCode = policy.code.toString();
     const contextKind = projection?.contextKind ?? 'policy';
-    const codeMetadata = extractCodeMetadata(projection?.text ?? '');
     return new PolicyChunk({
       id: [
         policy.source,
@@ -43,7 +42,6 @@ export class PolicyChunk {
                   : [[policy.source, policyCode].filter(Boolean).join('#')],
             }))
           : [],
-      ...codeMetadata,
     });
   }
 
@@ -86,22 +84,6 @@ export class PolicyChunk {
     return this.props.searchText?.trim() || this.props.text;
   }
 
-  get symbol(): string | undefined {
-    return this.props.symbol;
-  }
-
-  get sourceFile(): string | undefined {
-    return this.props.sourceFile;
-  }
-
-  get lineStart(): number | undefined {
-    return this.props.lineStart;
-  }
-
-  get relationTargets(): string[] {
-    return this.props.relationTargets ?? [];
-  }
-
   get policyGroup(): string | undefined {
     return this.props.policyGroup;
   }
@@ -117,29 +99,4 @@ export class PolicyChunk {
       searchText: this.searchText,
     };
   }
-}
-
-/** `[심볼]` 섹션이 있는 코드 심볼 문서에서 심볼·위치·관계 대상을 읽는다 */
-function extractCodeMetadata(text: string): Partial<PolicyChunkProps> {
-  if (!text.includes('[심볼]')) {
-    return {};
-  }
-  const symbol = sectionValue(text, '심볼');
-  const location = text.match(/^- 위치:\s+(.+?):(\d+)(?:-\d+)?$/m);
-  const relationTargets = [...text.matchAll(/^- [A-Z_]+:\s+(.+)$/gm)].map(
-    (match) => match[1].trim(),
-  );
-  return {
-    symbol: symbol || undefined,
-    sourceFile: location?.[1],
-    lineStart: location ? Number(location[2]) : undefined,
-    relationTargets: [...new Set(relationTargets)],
-  };
-}
-
-function sectionValue(text: string, heading: string): string {
-  const match = text.match(
-    new RegExp(`^\\[${heading}\\]\\s*\\n([^\\n]+)`, 'm'),
-  );
-  return match?.[1]?.trim() ?? '';
 }
