@@ -30,6 +30,11 @@ export interface ImportBinding {
 /** 조건 칸에 적는 말 묶음 */
 export type ConditionLabels = { [K in keyof typeof CONDITION_LABELS]: string };
 
+export interface PythonExtractorOptions {
+  /** Python 실행 파일. 기본은 `python3`. 3.9 이상이어야 한다 */
+  command?: string;
+}
+
 export interface TypeScriptExtractorOptions {
   /** typescript 모듈을 읽는 함수. 기본은 `await import('typescript')`. 다른 판을 쓰거나 시험할 때 바꾼다 */
   loadTypeScript?: () => Promise<TypeScriptModule>;
@@ -57,4 +62,49 @@ export interface TypeScriptFactProjector {
   text(sourceFile: TypeScript.SourceFile, node: TypeScript.Node): string;
   /** 호출식의 부르는 쪽 원문(`this.orderService.cancel`). 적을 수 없는 꼴이면 undefined */
   callee(expression: TypeScript.Expression): string | undefined;
+}
+
+// ── Python 도우미와 주고받는 JSON ──
+
+/** 도우미가 TypeScript 쪽과 같은 꼴로 적도록 넘기는 값. 상수는 constants.ts 한 곳에만 둔다 */
+export interface PythonExtractSettings {
+  maxTextLength: number;
+  maxRelationTargetLength: number;
+  clippedMark: string;
+  literal: string;
+  env: string;
+  functionBody: string;
+  labels: ConditionLabels;
+  classKinds: Readonly<Record<string, string>>;
+  enumBases: readonly string[];
+  importSeparator: string;
+  wholeModuleImport: string;
+  recursionLimit: number;
+}
+
+export interface PythonExtractRequest {
+  settings: PythonExtractSettings;
+  files: Array<{ filePath: string; content: string }>;
+}
+
+export interface PythonSymbolPayload {
+  symbol: string;
+  kind: string;
+  lineStart: number;
+  lineEnd: number;
+  content: string;
+  description?: string;
+  relations: RawRelation[];
+  facts?: ExecutionFact[];
+}
+
+/** 파일 하나의 결과. 구문 오류면 error 만 있다 */
+export interface PythonFileResult {
+  filePath: string;
+  symbols?: PythonSymbolPayload[];
+  error?: string;
+}
+
+export interface PythonExtractResponse {
+  results: PythonFileResult[];
 }

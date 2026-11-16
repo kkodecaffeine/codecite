@@ -1,4 +1,5 @@
 // 언어 추출기가 함께 쓰는 상수. 관계 이름, 확장자, 글 길이 한도, 가림 표시, 조건 칸의 이름
+import type { PythonExtractSettings } from './types.js';
 
 /**
  * 추출기가 내는 관계 이름. 대상은 아직 풀지 않은 원문이다
@@ -29,6 +30,8 @@ export const JAVASCRIPT_SOURCE_EXTENSIONS: readonly string[] = [
   '.mjs',
   '.cjs',
 ];
+/** Python 추출기가 맡는 확장자 */
+export const PYTHON_SOURCE_EXTENSIONS: readonly string[] = ['.py'];
 /** 선언 파일은 본문이 없어 심볼을 만들지 않는다 */
 export const DECLARATION_FILE_SUFFIXES: readonly string[] = [
   '.d.ts',
@@ -106,3 +109,38 @@ export const TYPESCRIPT_PARSE_BATCH_SIZE = 200;
 /** JavaScript 파일에만 붙는 진단(타입 표기는 TypeScript 파일에서만 쓸 수 있다 등)의 코드 범위. 구문 오류가 아니라 실패로 보지 않는다 */
 export const JAVASCRIPT_ONLY_DIAGNOSTIC_CODES = { from: 8000, to: 8999 };
 export const TYPESCRIPT_INSTALL_COMMAND = 'npm i -D typescript';
+
+/** Python 원문을 자른 자리에 남기는 생략 표시를 감싸는 주석 */
+export const PYTHON_OMISSION_COMMENT = { open: '#', close: '' };
+export const DEFAULT_PYTHON_COMMAND = 'python3';
+export const MINIMUM_PYTHON_VERSION = '3.9';
+/** Python 도우미가 판이 낮을 때 내는 종료 코드. 도우미에게 인자로 넘긴다 */
+export const PYTHON_VERSION_EXIT_CODE = 3;
+/** Python 도우미의 오류 출력을 보여 줄 때 자르는 길이 */
+export const PYTHON_STDERR_MAX_CHARS = 2_000;
+/** 깊게 중첩된 식도 읽도록 도우미가 올려 두는 재귀 한도 */
+export const PYTHON_RECURSION_LIMIT = 10_000;
+/** Python 표준 enum 의 기반 클래스. 이것을 상속한 클래스는 열거형으로 읽는다 */
+export const PYTHON_ENUM_BASES: readonly string[] = [
+  'Enum',
+  'IntEnum',
+  'StrEnum',
+  'Flag',
+  'IntFlag',
+];
+
+/** Python 도우미에 넘기는 값. TypeScript 추출기와 같은 표시·한도·이름으로 적게 한다 */
+export const PYTHON_EXTRACT_SETTINGS: PythonExtractSettings = {
+  maxTextLength: MAX_FACT_TEXT_LENGTH,
+  maxRelationTargetLength: MAX_RELATION_TARGET_LENGTH,
+  clippedMark: CLIPPED_TEXT_MARK,
+  literal: LITERAL_PLACEHOLDER,
+  env: ENV_PLACEHOLDER,
+  functionBody: FUNCTION_BODY_PLACEHOLDER,
+  labels: CONDITION_LABELS,
+  classKinds: CLASS_KIND_BY_DECORATOR,
+  enumBases: PYTHON_ENUM_BASES,
+  importSeparator: IMPORT_TARGET_SEPARATOR,
+  wholeModuleImport: WHOLE_MODULE_IMPORT,
+  recursionLimit: PYTHON_RECURSION_LIMIT,
+};
