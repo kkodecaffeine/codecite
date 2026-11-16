@@ -219,6 +219,12 @@ export interface SystemTopologyGraph {
 /**
  * 저장소 사이의 관계. HTTP·GraphQL 호출, 큐, 이벤트, 예약 실행, 패키지 의존은 명시적인 연결이다
  * SHARES_ENTITY·SHARES_CACHE_KEY 는 같은 테이블이나 같은 키를 쓴다는 간접 관계일 뿐 호출 관계가 아니다
+ * 간선 방향(source → target)
+ * - HTTP_CALLS·GRAPHQL_CALLS: 부르는 심볼 → 처리하는 심볼. CRON_TRIGGERS: 예약 작업 심볼 → 그 작업이 닿는 다른 저장소의 처리 심볼
+ * - PUBLISHES_TO_QUEUE·PUBLISHES_EVENT: 발행 심볼 → 구독 심볼. 발행 쪽에서 본 다른 저장소 구독자가 하나뿐일 때 쓴다
+ * - CONSUMES_FROM_QUEUE·HANDLES_EVENT: 구독 심볼 → 발행 심볼. 구독자가 여러 저장소에 있어 발행 쪽에서 하나를 고를 수 없을 때,
+ *   구독 쪽에서 본 다른 저장소 발행자가 하나뿐이면 쓴다. 그래서 같은 짝을 두 관계로 겹쳐 잇지 않는다
+ * - DEPENDS_ON_PACKAGE: 가져오는 심볼 → 패키지를 내는 저장소의 심볼. SHARES_*: 저장소 이름 순서로 이웃한 두 저장소의 자원 끝
  */
 export type CrossRepositoryRelation =
   | 'HTTP_CALLS'

@@ -1,5 +1,5 @@
-// 그래프 만들기 파이프라인. 지금은 스냅샷 → 파일 고르기 → 추출 → 레코드 → 탐지 → 저장소 안 토폴로지 → 결과 파일까지 한다
-// 엔티티 관계·필드 쓰기 색인도 만든다. 저장소 간 연결·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
+// 그래프 만들기 파이프라인. 스냅샷 → 파일 고르기 → 추출 → 레코드 → 탐지 → 저장소 안 토폴로지 → 저장소 간 연결·보고서 → 엔티티·필드 쓰기 → 결과 파일
+// 엔티티 관계·필드 쓰기 색인은 저장소 간 연결 뒤에 만든다
 import { readFile, realpath } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -24,8 +24,17 @@ import {
   parseDetectionsArtifact,
   runDetection,
 } from './detect.js';
+import {
+  GRAPH_CROSS_REPOSITORY_FILE,
+  GRAPH_REPORT_FILE,
+} from './data/constants.js';
 import { buildDataGraphArtifacts } from './data/index.js';
 import { compareSymbols } from './extractors/normalize.js';
+import {
+  buildCrossRepositoryGraph,
+  buildGraphReport,
+  readManualLinks,
+} from './link/index.js';
 import {
   compareText,
   matchingExtension,
@@ -160,8 +169,18 @@ export async function buildCodeGraph(
     });
     state.artifacts.set(GRAPH_TOPOLOGY_FILE, state.topology);
 
-    // ── 저장소 간 연결·보고서가 여기에 단계를 더한다 ──
-    // state.records, state.detections, state.topology 를 읽어 cross-repository.json, report.json 을 state.artifacts 에 넣는다
+    // ── 저장소 간 연결과 보고서: cross-repository.json, report.json ──
+    const linked = buildCrossRepositoryGraph(state, {
+      manualLinks: await readManualLinks(config),
+    });
+    state.artifacts.set(GRAPH_CROSS_REPOSITORY_FILE, linked.graph);
+    const report = buildGraphReport(state, linked.unresolved);
+    state.artifacts.set(GRAPH_REPORT_FILE, report);
+    logger.info('graph cross-repository linked', {
+      edges: linked.graph.edges.length,
+      unresolved: linked.unresolved.length,
+      coverage: report.coverage.status,
+    });
 
     // ── 엔티티 관계와 필드 쓰기 색인: entities.json, field-writers.json ──
     for (const [name, value] of Object.entries(
@@ -194,6 +213,7 @@ export async function buildCodeGraph(
       ),
       records: state.records,
       files,
+      report,
       durationMs: now().getTime() - startedAt,
     };
   } finally {

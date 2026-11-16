@@ -2,6 +2,7 @@
 // 결과 레코드는 src/extensions/code-knowledge.ts 계약을 그대로 쓰고, 여기에는 만드는 과정의 모양만 둔다
 import type {
   CodeSymbolRelation,
+  CrossRepositoryCoverage,
   CrossRepositoryRelation,
   CurrentSymbolRecord,
   EntityColumn,
@@ -255,6 +256,30 @@ export interface ManualLink {
   author?: string;
 }
 
+/**
+ * report.json. 연결을 못 한 것을 버리지 않고, 그래프를 넓히는 일이 이 보고서를 읽는 데서 시작하게 한다
+ * 경로는 모두 저장소 기준 상대 경로이고, 같은 입력이면 같은 출력이 나오도록 키와 목록 순서를 고정한다
+ */
+export interface GraphReport {
+  schemaVersion: 1;
+  /** 저장소 커밋 시각 가운데 가장 늦은 것 */
+  generatedAt: string;
+  /** cross-repository.json 의 coverage 와 같다 */
+  coverage: CrossRepositoryCoverage;
+  /** 못 이은 받는 쪽 계약 / 받는 쪽 계약. 계약이 없으면 0 */
+  unresolvedRatio: number;
+  /** 관계별 간선 수 */
+  relations: Partial<Record<CrossRepositoryRelation, number>>;
+  /** 까닭별 못 이은 항목 수 */
+  reasons: Partial<Record<UnresolvedReason, number>>;
+  /** 탐지기 이름 → 탐지 종류별 수 */
+  detectors: Record<string, Partial<Record<DetectionKind, number>>>;
+  /** 추출기가 건너뛴 파일과 까닭(manifest 의 failures) */
+  extractionFailures: Array<ExtractionFailure & { repository: string }>;
+  /** 못 이은 항목. 저장소·파일·줄 순서 */
+  unresolved: UnresolvedItem[];
+}
+
 // ── 설정 읽기 ──
 
 /** 설정 검사 실패를 알린다. 항목 이름과 까닭을 받아 throw 한다 */
@@ -458,6 +483,8 @@ export interface CodeGraphBuildResult {
   records: CurrentSymbolRecord[];
   /** 쓴 파일. 결과 폴더 기준 상대 경로 */
   files: string[];
+  /** report.json 과 같은 보고서. 못 이은 항목과 이유, coverage */
+  report: GraphReport;
   durationMs: number;
 }
 

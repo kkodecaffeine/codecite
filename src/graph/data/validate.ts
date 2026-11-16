@@ -20,13 +20,14 @@ import {
 } from '../constants.js';
 import { parseDetectionsArtifact, sortDetections } from '../detect.js';
 import { compareText, portablePath } from '../files.js';
+import { ManualLinkError, parseManualLinks } from '../link/manual.js';
 import {
   formatJson,
   serializeSymbols,
   validateGraphManifest,
 } from '../output.js';
 import { compareRecords, validateCurrentSymbolRecord } from '../records.js';
-import type { GraphManifest } from '../types.js';
+import type { GraphManifest, ManualLink } from '../types.js';
 import {
   GRAPH_CROSS_REPOSITORY_FILE,
   GRAPH_ENTITIES_FILE,
@@ -45,7 +46,6 @@ import {
   crossRepositoryShape,
   entitiesShape,
   fieldWritersShape,
-  manualLinksShape,
   reportShape,
   topologyShape,
 } from './validate-shapes.js';
@@ -696,8 +696,22 @@ async function checkManualLinkFile(
     return;
   }
   scanner.scan(label, value);
-  const links = manualLinksShape(new Shape(log, label), value);
-  links?.forEach((link, position) => {
+  // 수동 연결의 모양은 그래프 만들기와 같은 parseManualLinks 로 본다
+  let links: ManualLink[];
+  try {
+    links = parseManualLinks(value, label);
+  } catch (error) {
+    if (!(error instanceof ManualLinkError)) {
+      throw error;
+    }
+    log.error(
+      'shape',
+      label,
+      `${error.index === undefined ? '(root)' : `[${error.index}]`}: ${error.reason}`,
+    );
+    return;
+  }
+  links.forEach((link, position) => {
     for (const end of ['from', 'to'] as const) {
       const place = link[end];
       if (!index.hasRecord(place)) {

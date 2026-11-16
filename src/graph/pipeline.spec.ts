@@ -254,10 +254,12 @@ describe('buildCodeGraph', { timeout: 60_000 }, () => {
     const result = await buildCodeGraph(config, { extractors: [] });
 
     expect(result.files).toEqual([
+      'cross-repository.json',
       'detections.json',
       'entities.json',
       'field-writers.json',
       'manifest.json',
+      'report.json',
       'symbols/shop-api.jsonl',
       'symbols/shop-web.jsonl',
       'topology.json',

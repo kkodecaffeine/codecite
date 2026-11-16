@@ -38,8 +38,10 @@ export {
   buildDataGraphArtifacts,
   buildEntityRelationGraph,
   buildFieldWriterIndex,
+  GRAPH_CROSS_REPOSITORY_FILE,
   GRAPH_ENTITIES_FILE,
   GRAPH_FIELD_WRITERS_FILE,
+  GRAPH_REPORT_FILE,
   MAX_WRITERS_PER_FIELD,
   validateGraphOutput,
 } from './data/index.js';
@@ -53,6 +55,18 @@ export {
   pythonExtractor,
   typescriptExtractor,
 } from './extractors/index.js';
+export {
+  buildCrossRepositoryGraph,
+  buildGraphReport,
+  ManualLinkError,
+  parseManualLinks,
+  readManualLinks,
+} from './link/index.js';
+export type {
+  BuildCrossRepositoryOptions,
+  CrossRepositoryBuild,
+  ManualLinkSet,
+} from './link/types.js';
 export { buildCodeGraph } from './pipeline.js';
 export {
   GRAPHQL_PRESETS,

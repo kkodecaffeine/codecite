@@ -7,7 +7,7 @@ import type {
   SystemTopologyGraph,
 } from '../../extensions/code-knowledge.js';
 import { EXECUTION_FACT_KINDS, GRAPH_SCHEMA_VERSION } from '../constants.js';
-import type { ManualLink, UnresolvedItem } from '../types.js';
+import type { UnresolvedItem } from '../types.js';
 import {
   COVERAGE_STATUSES,
   CROSS_REPOSITORY_EXTRACTION_KINDS,
@@ -323,30 +323,4 @@ export function reportShape(
   return shape.ok
     ? { unresolved: (root.unresolved as UnresolvedItem[] | undefined) ?? [] }
     : undefined;
-}
-
-/** 수동 연결 파일(graph.links.json): 연결 목록 */
-export function manualLinksShape(
-  shape: Shape,
-  value: unknown,
-): ManualLink[] | undefined {
-  shape.array(value, '').forEach((item, index) => {
-    const path = `[${index}]`;
-    const link = shape.object(item, path);
-    if (!link) {
-      return;
-    }
-    shape.oneOf(link.relation, `${path}.relation`, CROSS_REPOSITORY_RELATIONS);
-    for (const end of ['from', 'to']) {
-      const place = shape.object(link[end], `${path}.${end}`);
-      if (place) {
-        shape.text(place.repository, `${path}.${end}.repository`);
-        shape.text(place.filePath, `${path}.${end}.filePath`);
-        shape.text(place.symbol, `${path}.${end}.symbol`);
-      }
-    }
-    shape.text(link.evidence, `${path}.evidence`);
-    shape.text(link.author, `${path}.author`, true);
-  });
-  return shape.ok ? (value as ManualLink[]) : undefined;
 }
