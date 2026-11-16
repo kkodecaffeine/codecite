@@ -33,7 +33,24 @@ export {
   readRepositorySymbols,
   validateGraphManifest,
 } from './output.js';
+export {
+  DEFAULT_GRAPH_PRESETS,
+  defaultGraphExtractors,
+  defaultRulesPreset,
+} from './defaults.js';
+export {
+  defaultSymbolExtractors,
+  pythonExtractor,
+  typescriptExtractor,
+} from './extractors/index.js';
 export { buildCodeGraph } from './pipeline.js';
+export {
+  GRAPHQL_PRESETS,
+  graphqlDocumentExtractor,
+} from './presets/graphql/index.js';
+export { HTTP_PRESETS } from './presets/http/index.js';
+export { MESSAGING_PRESETS, rulesPreset } from './presets/messaging/index.js';
+export { ORM_PRESETS, prismaSchemaExtractor } from './presets/orm/index.js';
 export { isDetectionPreset, resolvePresets } from './presets/registry.js';
 export {
   contentHash,

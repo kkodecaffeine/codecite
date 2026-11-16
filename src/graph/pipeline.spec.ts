@@ -249,9 +249,9 @@ const configFor = (extra: Record<string, unknown> = {}): GraphConfig =>
   );
 
 describe('buildCodeGraph', { timeout: 60_000 }, () => {
-  it('추출기가 없으면 저장소마다 빈 심볼 파일과 manifest 를 쓴다', async () => {
+  it('추출기를 비우면 저장소마다 빈 심볼 파일과 manifest 를 쓴다', async () => {
     const config = configFor();
-    const result = await buildCodeGraph(config);
+    const result = await buildCodeGraph(config, { extractors: [] });
 
     expect(result.files).toEqual([
       'detections.json',

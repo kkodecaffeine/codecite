@@ -385,15 +385,15 @@ export interface GraphOutputs {
 
 export interface BuildCodeGraphOptions {
   logger?: Logger;
-  /** 확장자로 골라 부르는 추출기. 설정의 extractorModules 에서 읽은 추출기 앞에 둔다 */
+  /** 확장자로 골라 부르는 추출기. 설정의 extractorModules 에서 읽은 추출기 앞에 둔다. 비우면 기본 추출기(defaultGraphExtractors), 빈 배열이면 추출하지 않는다 */
   extractors?: readonly SymbolExtractor[];
   /** 걸린 시간을 재는 시계. 결과 파일에는 쓰지 않는다 */
   now?: () => Date;
   /** 심볼 수가 절반 아래로 줄어도 멈추지 않을 저장소 이름. 줄어든 까닭을 확인한 뒤에만 쓴다 */
   acceptSymbolDrop?: readonly string[];
-  /** 고를 수 있는 탐지 프리셋. 설정 presets 의 이름으로 고른다(resolvePresets) */
+  /** 고를 수 있는 탐지 프리셋. 설정 presets 의 이름으로 고른다(resolvePresets). 비우면 기본 프리셋 전부(DEFAULT_GRAPH_PRESETS) */
   presets?: readonly DetectionPreset[];
-  /** 설정 detectors 규칙을 프리셋 하나로 만든다. 설정에 detectors 가 있으면 있어야 한다 */
+  /** 설정 detectors 규칙을 프리셋 하나로 만든다. 비우면 기본 규칙 탐지기 */
   rulesPreset?: (rules: readonly GraphDetectorRule[]) => DetectionPreset;
 }
 

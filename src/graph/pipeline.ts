@@ -15,6 +15,11 @@ import {
   SILENT_LOGGER,
 } from './constants.js';
 import {
+  DEFAULT_GRAPH_PRESETS,
+  defaultGraphExtractors,
+  defaultRulesPreset,
+} from './defaults.js';
+import {
   detectionsArtifact,
   parseDetectionsArtifact,
   runDetection,
@@ -79,14 +84,20 @@ export async function buildCodeGraph(
   const logger = options.logger ?? SILENT_LOGGER;
   const now = options.now ?? (() => new Date());
   const startedAt = now().getTime();
+  // 설정 extractorModules 의 자체 추출기가 맡은 확장자는 기본 추출기에서 뺀다(자체 추출기가 우선한다)
+  // 옵션으로 직접 넘긴 추출기와 겹치면 지금처럼 오류로 알린다
+  const moduleExtractors = await loadExtractorModules(config);
   const extractors = [
-    ...(options.extractors ?? []),
-    ...(await loadExtractorModules(config)),
+    ...(options.extractors ??
+      withoutClaimedExtensions(defaultGraphExtractors(), moduleExtractors)),
+    ...moduleExtractors,
   ];
   const routes = extractorRoutes(extractors);
-  const presets = await resolvePresets(config, options.presets ?? [], {
-    rules: options.rulesPreset,
-  });
+  const presets = await resolvePresets(
+    config,
+    options.presets ?? DEFAULT_GRAPH_PRESETS,
+    { rules: options.rulesPreset ?? defaultRulesPreset },
+  );
   const toolVersion = await readToolVersion();
   const previous = await readPreviousManifest(config.output, logger);
   const previousDetections = await readPreviousDetections(
@@ -379,6 +390,43 @@ function extractorRoutes(
     }
   }
   return routes;
+}
+
+/**
+ * 자체 추출기가 맡은 확장자를 기본 추출기에서 뺀다. 맡을 확장자가 하나도 안 남은 기본 추출기는 뺀다
+ * 같은 이름의 자체 추출기가 있으면 기본 추출기를 통째로 뺀다
+ */
+function withoutClaimedExtensions(
+  defaults: readonly SymbolExtractor[],
+  custom: readonly SymbolExtractor[],
+): SymbolExtractor[] {
+  const claimed = new Set(
+    custom.flatMap((extractor) =>
+      isSymbolExtractor(extractor)
+        ? extractor.extensions.map((extension) => extension.toLowerCase())
+        : [],
+    ),
+  );
+  const customNames = new Set(custom.map((extractor) => extractor.name));
+  const kept: SymbolExtractor[] = [];
+  for (const extractor of defaults) {
+    if (customNames.has(extractor.name)) {
+      continue;
+    }
+    const extensions = extractor.extensions.filter(
+      (extension) => !claimed.has(extension.toLowerCase()),
+    );
+    if (extensions.length === extractor.extensions.length) {
+      kept.push(extractor);
+    } else if (extensions.length > 0) {
+      kept.push({
+        name: extractor.name,
+        extensions,
+        extract: (files, context) => extractor.extract(files, context),
+      });
+    }
+  }
+  return kept;
 }
 
 /** 설정 extractorModules 의 모듈을 불러온다. 기본 내보내기(추출기 하나나 배열)나 extractors·extractor 이름 내보내기를 받는다 */
