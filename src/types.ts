@@ -93,5 +93,36 @@ export interface Codecite {
   readonly indexSummary: CodeciteIndexSummary;
 }
 
+/** 답변 모델·임베딩 제공자 설정. 모델 이름은 기본값이 없어 제공자를 정했으면 함께 적는다 */
+export interface CodeciteProviderConfig {
+  provider: 'openai' | 'ollama';
+  model?: string;
+  /** OpenAI 호환 서버나 Ollama 서버 주소 */
+  baseUrl?: string;
+}
+
+/** `codecite.config.json` 의 모양. `loadConfig` 가 돌려줄 때 경로는 절대 경로로 풀려 있다 */
+export interface CodeciteConfig {
+  source: { type: 'csv'; path: string };
+  llm?: CodeciteProviderConfig;
+  embedding?: CodeciteProviderConfig;
+  index: { path: string };
+  vocabulary?: Partial<Vocabulary>;
+}
+
+/** `loadConfig` 선택 사항 */
+export interface LoadConfigOptions {
+  /** 설정 경고를 남기고, 만든 엔진에도 같은 로거를 넘긴다 */
+  logger?: Logger;
+  /** API 키를 읽을 환경 변수. 없으면 `process.env` */
+  env?: Readonly<Record<string, string | undefined>>;
+}
+
+/** `loadConfig` 결과. options 를 그대로 `createCodecite` 에 넘긴다 */
+export interface LoadedConfig {
+  config: CodeciteConfig;
+  options: CodeciteOptions;
+}
+
 /** 로그 수준. 낮은 것부터 debug, info, warn, error */
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';

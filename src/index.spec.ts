@@ -6,9 +6,10 @@ describe('codecite', () => {
     expect(codecite.version).toBe('0.0.0');
   });
 
-  it('허브, 어댑터, 프롬프트를 공개 API 로 내보낸다', () => {
+  it('허브, 설정 읽기, 어댑터, 프롬프트를 공개 API 로 내보낸다', () => {
     for (const name of [
       'createCodecite',
+      'loadConfig',
       'csvPolicySource',
       'CsvFormatError',
       'openAiClient',

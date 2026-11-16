@@ -2,6 +2,7 @@
 export const version = '0.0.0';
 
 export { createCodecite } from './codecite.js';
+export { loadConfig } from './config.js';
 export { consoleLogger, createConsoleLogger, noopLogger } from './logger.js';
 export {
   CsvFormatError,
@@ -20,10 +21,14 @@ export type {
   Codecite,
   CodeciteAnswer,
   CodeciteCitation,
+  CodeciteConfig,
   CodeciteIndexSummary,
   CodeciteLimits,
   CodeciteOptions,
+  CodeciteProviderConfig,
   CodeciteTrace,
+  LoadConfigOptions,
+  LoadedConfig,
   LogLevel,
 } from './types.js';
 export type {
