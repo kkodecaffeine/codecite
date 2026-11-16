@@ -23,6 +23,7 @@
 
 - `policies.csv`: 한 행이 claim 하나입니다. 열은 [설계 문서](../../docs/design/2026-11-16-v0.md#데이터-claim-csv)의 claim CSV 를 따릅니다. `claim_id` 를 비워 두었으므로 묶음·종류·문장으로 만든 내용 해시가 id 가 됩니다. `claim_conditions`, `claim_exceptions`, `user_question_examples`, `search_aliases` 처럼 값이 여러 개인 열은 `;` 로 나눕니다.
 - `golden-questions.json`: 골든 질문 35 개입니다. 묶음마다 직접 묻는 질문, 다른 말로 바꾼 질문(포인트, 반품, 할인권, 택배비, 레벨), 조건·예외 질문, 말투가 섞인 질문을 두었습니다. 마지막 4 개는 데이터에 답이 없는 질문입니다.
+- `baseline.json`: 골든 평가의 기준선입니다. 질문마다 hitAny, hitAll, status 가 맞았는지 적혀 있습니다. `codecite eval --write-baseline` 으로 만들고, 사람이 PR 로 검토해서만 바꿉니다.
 - `codecite.config.json`: 소스 경로, 답변 모델, 동의어·질문 말투 낱말·묶음 별칭 설정입니다. API 키는 넣지 않습니다.
 
 ## 해 보기
@@ -56,5 +57,7 @@ npx codecite eval
   "expectedClaimIds": ["claim-8b2a9a4ce48882bc"]
 }
 ```
+
+결과는 `baseline.json` 과 질문별로 비교합니다. 기준선에서 맞던 항목(hitAny, hitAll, status)이 틀려지거나 기준선의 질문이 사라지면 회귀로 보고 종료 코드 1 로 끝납니다. 나아진 질문은 알리기만 하고 실패로 치지 않습니다. CI 는 `npm run eval` 로 PR 마다 이 검사를 돌립니다.
 
 기대값은 내용 해시 id 이므로 claim 문장이나 종류를 고치면 id 가 바뀝니다. 그때는 골든 질문의 기대값도 함께 다시 봅니다. 골든 질문은 스크립트가 덮어쓰지 않고 사람이 PR 로만 고칩니다.

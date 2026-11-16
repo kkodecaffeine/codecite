@@ -31,7 +31,8 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "eval": "node dist/cli.js eval --cwd examples/dotori-market"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

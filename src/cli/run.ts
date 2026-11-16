@@ -11,6 +11,7 @@ import {
   GLOBAL_OPTIONS,
 } from './constants.js';
 import { CliUsageError } from './errors.js';
+import { evalCommand } from './eval-command.js';
 import type {
   CliCommand,
   CliCommandGroup,
@@ -28,6 +29,7 @@ import type {
 const COMMANDS: readonly CliCommand[] = [
   indexCommand,
   askCommand,
+  evalCommand,
   serveCommand,
 ];
 

@@ -90,7 +90,7 @@ describe('runCli 인자 해석', () => {
 
     expect(run.code).toBe(0);
     expect(run.stdout).toContain('Usage: codecite <command> [options]');
-    for (const name of ['index', 'ask', 'serve', '--cwd <dir>']) {
+    for (const name of ['index', 'ask', 'eval', 'serve', '--cwd <dir>']) {
       expect(run.stdout).toContain(name);
     }
   });

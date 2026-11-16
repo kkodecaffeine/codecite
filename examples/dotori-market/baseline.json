@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "total": 35,
+  "passed": 30,
+  "questions": [
+    {
+      "id": "points-01",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "points-02",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "points-03",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "points-04",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "points-05",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "points-06",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "refund-01",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "refund-02",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "refund-03",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "refund-04",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "refund-05",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "refund-06",
+      "passed": false,
+      "hitAny": true,
+      "hitAll": false,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-01",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-02",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-03",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-04",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-05",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-06",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "coupon-07",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "shipping-01",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "shipping-02",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "shipping-03",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "shipping-04",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "shipping-05",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "shipping-06",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "membership-01",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "membership-02",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "membership-03",
+      "passed": false,
+      "hitAny": false,
+      "hitAll": false,
+      "status": "insufficient_evidence",
+      "statusMatch": null
+    },
+    {
+      "id": "membership-04",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "membership-05",
+      "passed": true,
+      "hitAny": true,
+      "hitAll": true,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "membership-06",
+      "passed": false,
+      "hitAny": false,
+      "hitAll": false,
+      "status": "answered",
+      "statusMatch": null
+    },
+    {
+      "id": "insufficient-01",
+      "passed": false,
+      "hitAny": null,
+      "hitAll": null,
+      "status": "answered",
+      "statusMatch": false
+    },
+    {
+      "id": "insufficient-02",
+      "passed": true,
+      "hitAny": null,
+      "hitAll": null,
+      "status": "insufficient_evidence",
+      "statusMatch": true
+    },
+    {
+      "id": "insufficient-03",
+      "passed": false,
+      "hitAny": null,
+      "hitAll": null,
+      "status": "answered",
+      "statusMatch": false
+    },
+    {
+      "id": "insufficient-04",
+      "passed": true,
+      "hitAny": null,
+      "hitAll": null,
+      "status": "insufficient_evidence",
+      "statusMatch": true
+    }
+  ]
+}
