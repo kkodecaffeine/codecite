@@ -255,6 +255,8 @@ describe('buildCodeGraph', { timeout: 60_000 }, () => {
 
     expect(result.files).toEqual([
       'detections.json',
+      'entities.json',
+      'field-writers.json',
       'manifest.json',
       'symbols/shop-api.jsonl',
       'symbols/shop-web.jsonl',

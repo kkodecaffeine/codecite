@@ -1,5 +1,5 @@
 // 그래프 만들기 파이프라인. 지금은 스냅샷 → 파일 고르기 → 추출 → 레코드 → 탐지 → 저장소 안 토폴로지 → 결과 파일까지 한다
-// 저장소 간 연결·엔티티·필드 쓰기·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
+// 엔티티 관계·필드 쓰기 색인도 만든다. 저장소 간 연결·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
 import { readFile, realpath } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -24,6 +24,7 @@ import {
   parseDetectionsArtifact,
   runDetection,
 } from './detect.js';
+import { buildDataGraphArtifacts } from './data/index.js';
 import { compareSymbols } from './extractors/normalize.js';
 import {
   compareText,
@@ -75,6 +76,7 @@ import type {
  * - 심볼 수가 지난번의 절반 아래로 줄면 아무것도 쓰지 않고 멈춘다
  * - 켠 프리셋으로 저장소마다 계약을 탐지해 detections.json 에 남긴다. 재사용한 저장소는 지난 탐지 결과를 그대로 쓴다
  * - 레코드와 탐지 결과로 저장소 안 토폴로지를 그려 topology.json 에 남긴다
+ * - 엔티티 선언으로 엔티티 관계(entities.json)를, ORM 갱신 탐지와 대입 사실로 필드 쓰기 색인(field-writers.json)을 만든다
  * 임시 폴더는 성공·실패와 상관없이 지운다
  */
 export async function buildCodeGraph(
@@ -158,9 +160,15 @@ export async function buildCodeGraph(
     });
     state.artifacts.set(GRAPH_TOPOLOGY_FILE, state.topology);
 
-    // ── 저장소 간 연결·엔티티·필드 쓰기·보고서가 여기에 단계를 더한다 ──
-    // state.records, state.detections, state.topology 를 읽어
-    // cross-repository.json, entities.json, field-writers.json, report.json 을 state.artifacts 에 넣는다
+    // ── 저장소 간 연결·보고서가 여기에 단계를 더한다 ──
+    // state.records, state.detections, state.topology 를 읽어 cross-repository.json, report.json 을 state.artifacts 에 넣는다
+
+    // ── 엔티티 관계와 필드 쓰기 색인: entities.json, field-writers.json ──
+    for (const [name, value] of Object.entries(
+      buildDataGraphArtifacts(state),
+    )) {
+      state.artifacts.set(name, value);
+    }
 
     const manifest = buildManifest(config, repositories, toolVersion);
     const files = await writeGraphOutputs(config.output, {
