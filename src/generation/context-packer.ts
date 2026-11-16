@@ -65,9 +65,7 @@ export function orderEvidenceSlots(
 ): PolicyEvidence[] {
   const vocabulary = options.vocabulary ?? DEFAULT_KOREAN_VOCABULARY;
   const unique = deduplicateEvidence(ranked);
-  const leading = isPolicyFirstQuestion(question)
-    ? selectPolicyFirstEvidence(question, unique, undefined, vocabulary)
-    : selectAnchorPolicyEvidence(question, unique, undefined, vocabulary);
+  const leading = selectLeadingEvidence(question, unique, vocabulary);
   const leadingIds = new Set(leading.map((item) => item.chunkId));
   const rest = unique.filter((item) => !leadingIds.has(item.chunkId));
 
@@ -109,6 +107,20 @@ export function orderEvidenceSlots(
     ...rest.filter((item) => picked.has(item)),
     ...rest.filter((item) => !picked.has(item)),
   ];
+}
+
+/**
+ * 근거 묶음 앞자리에 둘 근거. 정책 문장이 바로 답하는 질문이면 정책 우선 근거, 아니면 기준 근거(anchor) 하나다
+ * 허브가 기본 검색 밖의 후보까지 넣어 앞자리를 미리 고를 때도 이 함수를 써서, 묶기와 같은 규칙으로 고른다
+ */
+export function selectLeadingEvidence(
+  question: string,
+  evidence: readonly PolicyEvidence[],
+  vocabulary: Vocabulary = DEFAULT_KOREAN_VOCABULARY,
+): PolicyEvidence[] {
+  return isPolicyFirstQuestion(question)
+    ? selectPolicyFirstEvidence(question, evidence, undefined, vocabulary)
+    : selectAnchorPolicyEvidence(question, evidence, undefined, vocabulary);
 }
 
 /**
