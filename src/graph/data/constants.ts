@@ -159,13 +159,20 @@ export const VALIDATION_PATH_KEYS: readonly string[] = [
 ];
 /** 원문 키. 저장소 소스 글이라 이 컴퓨터의 경로만 보고, 흔한 경로 꼴은 보지 않는다 */
 export const VALIDATION_CONTENT_KEY = 'content';
-/** 코드 식별자를 담는 필드. 비밀값 검사에서 값 하나를 통째로 무작위 문자열로 보는 검사를 하지 않는다 */
-export const VALIDATION_IDENTIFIER_KEYS: readonly string[] = [
-  'symbol',
-  'name',
-  'subject',
+/**
+ * 코드의 리터럴 값을 그대로 옮겨 담는 필드. 값 하나가 통째로 무작위 문자열인지 보는 검사는 이 필드에만 한다
+ * 심볼·이름·연산 이름·멤버 같은 식별자 필드는 긴 낙타 표기 이름이 많아 이 검사를 하지 않는다(형식이 알려진 토큰 검사는 모든 필드에 한다)
+ */
+export const VALIDATION_LITERAL_KEYS: readonly string[] = [
+  'value',
+  'valueSummary',
+  'path',
+  'url',
+  'host',
+  'target',
+  'message',
+  'evidence',
 ];
-/** 실행 사실 목록 필드. 안의 값은 리터럴을 가린 코드 식이다 */
 export const VALIDATION_EXECUTION_FACTS_KEY = 'executionFacts';
 /** 라우트 경로나 그것으로 만든 id 를 담는 키. `/home/…` 같은 라우트가 있어 리눅스 집 경로 꼴은 보지 않는다 */
 export const VALIDATION_ROUTE_KEYS: readonly string[] = [

@@ -506,6 +506,10 @@ describe('validateGraphOutput: 실패', () => {
     await edit('topology.json', (graph) => {
       graph.nodes[1].name = 'ReviewPhotoV2UploadPresignedUrlFactory';
     });
+    await edit('field-writers.json', (index) => {
+      index.writers['shop-api:status'][0].entity =
+        'couponExpiry30dReminderH2cScheduler';
+    });
     expect(issuesOf(await validateGraphOutput(output), 'secret')).toEqual([]);
 
     const token = fakeGithubToken();

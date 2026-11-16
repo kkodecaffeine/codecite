@@ -17,7 +17,7 @@ import {
   MACHINE_ROOT_MIN_SEGMENTS,
   VALIDATION_CONTENT_KEY,
   VALIDATION_EXECUTION_FACTS_KEY,
-  VALIDATION_IDENTIFIER_KEYS,
+  VALIDATION_LITERAL_KEYS,
   VALIDATION_PATH_KEYS,
   VALIDATION_ROUTE_KEYS,
 } from './constants.js';
@@ -125,8 +125,8 @@ export function isPortablePath(text: string): boolean {
  * 가리기 규칙을 다시 걸었을 때 바뀌는 글이면 비밀값 모양이 남은 것이다
  * - 이미 가린 표시(`<redacted>`, `[REDACTED]`)는 남은 것으로 보지 않는다
  * - 원문(content)은 만들 때 같은 규칙으로 가렸으므로 그대로 다시 건다
- * - 그 밖의 글은 따옴표로 감싸 한 번 더 건다. 값 하나가 통째로 무작위 문자열(32 자 이상)이면 그때 걸린다
- * - 심볼·이름 필드와 실행 사실은 코드 식별자·식이라 따옴표로 감싸 보지 않는다. 실행 사실의 리터럴은 만들 때 `<literal>` 로 바뀐다
+ * - 코드 리터럴 값을 옮겨 담는 필드(VALIDATION_LITERAL_KEYS)는 따옴표로 감싸 한 번 더 건다. 값 하나가 통째로 무작위 문자열(32 자 이상)이면 그때 걸린다
+ * - 식별자 필드와 실행 사실은 따옴표로 감싸 보지 않는다. 실행 사실의 리터럴은 만들 때 `<literal>` 로 바뀐다
  */
 export function looksSecret(text: string, key: string, path = ''): boolean {
   const normalized = text.replaceAll(REDACTED_PLACEHOLDER, REDACTED_VALUE);
@@ -137,8 +137,7 @@ export function looksSecret(text: string, key: string, path = ''): boolean {
     return true;
   }
   if (
-    key === VALIDATION_CONTENT_KEY ||
-    VALIDATION_IDENTIFIER_KEYS.includes(key) ||
+    !VALIDATION_LITERAL_KEYS.includes(key) ||
     path.includes(`${VALIDATION_EXECUTION_FACTS_KEY}[`) ||
     normalized.includes('"') ||
     normalized.includes('\n')
