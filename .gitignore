@@ -1,0 +1,9 @@
+node_modules/
+dist/
+coverage/
+# 색인 캐시
+.codecite/
+# 비밀값
+.env
+.env.*
+*.env

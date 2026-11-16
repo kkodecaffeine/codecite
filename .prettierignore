@@ -1,0 +1,6 @@
+dist
+coverage
+node_modules
+.codecite
+package-lock.json
+LICENSE
