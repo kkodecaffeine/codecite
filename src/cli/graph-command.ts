@@ -140,8 +140,56 @@ export const graphBuildCommand: CliLeafCommand = {
         ? `${repository.failures.length} skipped`
         : '',
     ]);
+    const links = Object.values(result.report.relations).reduce(
+      (sum, count) => sum + (count ?? 0),
+      0,
+    );
     context.io.stdout(
-      `${formatTable(rows)}Wrote ${result.files.length} files to ${displayPath(context.cwd, result.output)} in ${(result.durationMs / 1000).toFixed(1)}s\n`,
+      `${formatTable(rows)}Links: ${links}, unresolved: ${result.report.unresolved.length} (see "codecite graph report")\nWrote ${result.files.length} files to ${displayPath(context.cwd, result.output)} in ${(result.durationMs / 1000).toFixed(1)}s\n`,
+    );
+    return EXIT_OK;
+  },
+};
+
+/** `codecite graph report`: report.json 을 사람이 읽는 글로 보인다. 못 이은 항목을 까닭별로 묶고 다음 할 일을 붙인다 */
+export const graphReportCommand: CliLeafCommand = {
+  name: 'report',
+  summary: 'Show the links that could not be made and why',
+  usage: '[--config <file>] [--limit <n>] [--json]',
+  description: [
+    'Reads report.json from the graph output folder (run "codecite graph build" first).',
+    'Shows coverage, link counts per relation, and the unresolved items grouped by reason,',
+    'each with its candidates and what to do next.',
+  ],
+  options: {
+    config: CONFIG_OPTION,
+    limit: {
+      type: 'string',
+      valueName: '<n>',
+      description: 'Items to show per reason (default: 20)',
+    },
+    json: { type: 'boolean', description: 'Print report.json as is' },
+  },
+  async run(context) {
+    rejectPositionals(context);
+    const limit = positiveInteger(context.values.limit, 'limit');
+    const graph = await import('../graph/index.js');
+    const config = await graph.loadGraphConfig(context.cwd, {
+      file: configPath(context),
+    });
+    const report = await graph.readGraphReport(config.output);
+    if (!report) {
+      throw new Error(
+        `report.json was not found in ${displayPath(context.cwd, config.output)}; run "codecite graph build" first.`,
+      );
+    }
+    context.io.stdout(
+      context.values.json === true
+        ? `${JSON.stringify(report, null, 2)}\n`
+        : graph.formatGraphReport(
+            report,
+            limit === undefined ? {} : { itemsPerReason: limit },
+          ),
     );
     return EXIT_OK;
   },
@@ -186,7 +234,12 @@ export const graphCommand: CliCommandGroup = {
   description: [
     'Reads codecite.graph.json (see "codecite graph init") and writes the graph output folder.',
   ],
-  commands: [graphInitCommand, graphBuildCommand, graphValidateCommand],
+  commands: [
+    graphInitCommand,
+    graphBuildCommand,
+    graphReportCommand,
+    graphValidateCommand,
+  ],
 };
 
 function configPath(context: CliContext): string {
@@ -328,6 +381,20 @@ function splitList(value: string | boolean | undefined): string[] {
         .map((item) => item.trim())
         .filter(Boolean)
     : [];
+}
+
+function positiveInteger(
+  value: string | boolean | undefined,
+  name: string,
+): number | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1) {
+    throw new CliUsageError(`--${name} must be a positive integer`);
+  }
+  return number;
 }
 
 function rejectPositionals(context: CliContext): void {

@@ -213,6 +213,15 @@ describe('codecite graph build', { timeout: 60_000 }, () => {
     );
     expect(topology).toContain('/orders');
 
+    expect(first.stdout).toMatch(/Links: \d+, unresolved: \d+/);
+    const report = await cli(['graph', 'report']);
+    expect(report.code).toBe(0);
+    expect(report.stdout.length).toBeGreaterThan(0);
+    const reportJson = await cli(['graph', 'report', '--json']);
+    expect(JSON.parse(reportJson.stdout)).toMatchObject({ schemaVersion: 1 });
+    const badLimit = await cli(['graph', 'report', '--limit', '0']);
+    expect(badLimit.code).toBe(2);
+
     const valid = await cli(['graph', 'validate']);
     expect(valid.code).toBe(0);
     expect(valid.stdout).toContain('OK: 0 errors');
@@ -231,5 +240,17 @@ describe('codecite graph build', { timeout: 60_000 }, () => {
 
     expect(run.code).toBe(1);
     expect(run.stderr).toContain('codecite graph init');
+  });
+
+  it('결과 폴더가 없으면 report 는 graph build 를 안내하고 1 로 끝난다', async () => {
+    await writeFile(
+      join(folder, 'codecite.graph.json'),
+      JSON.stringify({ repositories: [{ name: 'shop-api', url: 'x.git' }] }),
+    );
+
+    const run = await cli(['graph', 'report']);
+
+    expect(run.code).toBe(1);
+    expect(run.stderr).toContain('run "codecite graph build" first');
   });
 });
