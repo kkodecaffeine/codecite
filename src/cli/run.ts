@@ -12,6 +12,7 @@ import {
 } from './constants.js';
 import { CliUsageError } from './errors.js';
 import { evalCommand } from './eval-command.js';
+import { graphCommand } from './graph-command.js';
 import type {
   CliCommand,
   CliCommandGroup,
@@ -31,11 +32,13 @@ const COMMANDS: readonly CliCommand[] = [
   askCommand,
   evalCommand,
   serveCommand,
+  graphCommand,
 ];
 
 const ROOT_DESCRIPTION = [
   'Answers questions from a policy claim CSV and cites the claims it used.',
   'Reads codecite.config.json in the current folder (or --cwd).',
+  '"codecite graph" builds a call and relation graph across repositories from codecite.graph.json.',
 ];
 
 /**
