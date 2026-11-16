@@ -3,6 +3,7 @@
 import type TypeScript from 'typescript';
 import type { ExecutionFact } from '../../extensions/code-knowledge.js';
 import type {
+  CodeSite,
   ExtractContext,
   ExtractedSymbol,
   ExtractionFailure,
@@ -27,15 +28,19 @@ import {
   errorMessage,
   finalizeExtraction,
   finalizeRelations,
+  finalizeSites,
   hasExtension,
   importTarget,
 } from './normalize.js';
+import { createTypeScriptSiteReader } from './sites-typescript.js';
 import type {
   ImportBinding,
   RawRelation,
   TypeScriptExtractorOptions,
   TypeScriptFactProjector,
   TypeScriptModule,
+  TypeScriptReaderTools,
+  TypeScriptSiteReader,
 } from './types.js';
 
 /** `.ts .tsx .mts .cts .js .jsx .mjs .cjs` 파일에서 심볼·관계·실행 사실을 뽑는 추출기 */
@@ -61,6 +66,7 @@ export function typescriptExtractor(
       }
       const ts = await requireTypeScript(load, context.repository);
       const projector = createTypeScriptFactProjector(ts);
+      const siteReader = createTypeScriptSiteReader(ts, projector);
       const symbols: ExtractedSymbol[] = [];
       const failures: ExtractionFailure[] = [];
       for (
@@ -69,7 +75,14 @@ export function typescriptExtractor(
         index += TYPESCRIPT_PARSE_BATCH_SIZE
       ) {
         const batch = targets.slice(index, index + TYPESCRIPT_PARSE_BATCH_SIZE);
-        extractBatch(ts, projector, batch, context, symbols, failures);
+        extractBatch(
+          ts,
+          { projector, siteReader },
+          batch,
+          context,
+          symbols,
+          failures,
+        );
       }
       context.logger.debug('typescript extraction finished', {
         repository: context.repository,
@@ -108,7 +121,7 @@ async function requireTypeScript(
 
 function extractBatch(
   ts: TypeScriptModule,
-  projector: TypeScriptFactProjector,
+  readers: TypeScriptReaderTools,
   batch: readonly SourceFile[],
   context: ExtractContext,
   symbols: ExtractedSymbol[],
@@ -138,7 +151,7 @@ function extractBatch(
       symbols.push(
         ...new FileSymbolReader(
           ts,
-          projector,
+          readers,
           file,
           sourceFile,
           context.repository,
@@ -232,13 +245,18 @@ class FileSymbolReader {
   private readonly language: string;
   private readonly symbols: ExtractedSymbol[] = [];
 
+  private readonly projector: TypeScriptFactProjector;
+  private readonly siteReader: TypeScriptSiteReader;
+
   constructor(
     private readonly ts: TypeScriptModule,
-    private readonly projector: TypeScriptFactProjector,
+    readers: TypeScriptReaderTools,
     private readonly file: SourceFile,
     private readonly sourceFile: TypeScript.SourceFile,
     private readonly repository: string,
   ) {
+    this.projector = readers.projector;
+    this.siteReader = readers.siteReader;
     this.imports = this.importBindings();
     this.language = hasExtension(file.filePath, JAVASCRIPT_SOURCE_EXTENSIONS)
       ? 'javascript'
@@ -361,6 +379,7 @@ class FileSymbolReader {
     }
     this.addSymbol(node, name, 'constant', {
       documented,
+      sites: this.siteReader.sites(this.sourceFile, node),
       relations: [...this.importRelations(node), ...this.callRelations(node)],
       facts: this.projector.constantFacts(this.sourceFile, name, value),
     });
@@ -374,6 +393,7 @@ class FileSymbolReader {
   ): void {
     this.addSymbol(node, name, 'function', {
       documented,
+      sites: this.siteReader.sites(this.sourceFile, node),
       relations: [
         ...this.importRelations(node),
         ...this.decoratorRelations(node),
@@ -391,6 +411,7 @@ class FileSymbolReader {
         .map((decorator) => CLASS_KIND_BY_DECORATOR[leafName(decorator)])
         .find((value) => value !== undefined) ?? 'class';
     this.addSymbol(node, name, kind, {
+      sites: this.siteReader.decoratorSites(this.sourceFile, node),
       relations: [
         ...this.importRelations(node),
         ...this.heritageRelations(node),
@@ -408,8 +429,11 @@ class FileSymbolReader {
         ...this.decoratorRelations(member),
         ...this.callRelations(member),
       ];
+      const memberSites = (): CodeSite[] =>
+        this.siteReader.sites(this.sourceFile, member);
       if (ts.isConstructorDeclaration(member) && member.body) {
         this.addSymbol(member, `${name}.constructor`, 'method', {
+          sites: memberSites(),
           relations: memberRelations(),
           facts: this.projector.bodyFacts(this.sourceFile, member.body),
         });
@@ -430,6 +454,7 @@ class FileSymbolReader {
             ? ':set'
             : '';
         this.addSymbol(member, `${name}.${memberName}${suffix}`, 'method', {
+          sites: memberSites(),
           relations: memberRelations(),
           facts: this.projector.bodyFacts(this.sourceFile, member.body),
         });
@@ -439,6 +464,7 @@ class FileSymbolReader {
         const fn = this.functionLike(member.initializer);
         const symbol = `${name}.${memberName}`;
         this.addSymbol(member, symbol, fn ? 'method' : 'constant', {
+          sites: memberSites(),
           relations: memberRelations(),
           facts: fn
             ? this.projector.bodyFacts(this.sourceFile, fn.body)
@@ -459,6 +485,7 @@ class FileSymbolReader {
     details: {
       relations: RawRelation[];
       facts?: ExecutionFact[];
+      sites?: CodeSite[];
       documented?: TypeScript.Node;
     },
   ): void {
@@ -469,6 +496,7 @@ class FileSymbolReader {
     const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
     const description = this.documentation(details.documented ?? node);
     const executable = kind === 'function' || kind === 'method';
+    const sites = finalizeSites(details.sites ?? []);
     this.symbols.push({
       filePath: this.file.filePath,
       language: this.language,
@@ -486,6 +514,7 @@ class FileSymbolReader {
       ...(executable || (details.facts && details.facts.length > 0)
         ? { executionFacts: details.facts ?? [] }
         : {}),
+      ...(sites.length > 0 ? { sites } : {}),
     });
   }
 

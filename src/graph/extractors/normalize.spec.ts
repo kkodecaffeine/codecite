@@ -7,6 +7,7 @@ import {
   finalizeExtraction,
   finalizeFacts,
   finalizeRelations,
+  finalizeSites,
   hasExtension,
   importTarget,
   negateCondition,
@@ -171,6 +172,33 @@ describe('finalizeExtraction', () => {
     expect(result.failures.map((failure) => failure.filePath)).toEqual([
       'src/c.ts',
       'src/z.ts',
+    ]);
+  });
+});
+
+describe('finalizeSites', () => {
+  it('인자 값을 가리고 같은 자리를 합친 뒤 줄 번호로 정렬한다', () => {
+    const fakeHex = '0123456789abcdef'.repeat(3);
+    const redeem = {
+      kind: 'call' as const,
+      name: 'couponGateway.redeem',
+      line: 7,
+      args: [{ text: '<literal>', literal: `/coupons/${fakeHex}` }],
+    };
+    const sites = finalizeSites([
+      redeem,
+      { kind: 'decorator', name: 'Post', line: 2, args: [] },
+      redeem,
+    ]);
+
+    expect(sites).toEqual([
+      { kind: 'decorator', name: 'Post', line: 2, args: [] },
+      {
+        kind: 'call',
+        name: 'couponGateway.redeem',
+        line: 7,
+        args: [{ text: '<literal>', literal: '/coupons/<redacted>' }],
+      },
     ]);
   });
 });

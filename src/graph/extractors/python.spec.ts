@@ -351,6 +351,114 @@ describe.skipIf(!version)(PYTHON_SUITE, () => {
     ]);
   });
 
+  it('라우트·HTTP 호출·작업 데코레이터 자리를 키워드 인자까지 읽고, 비밀값 모양 인자는 가린다', async () => {
+    // 저장소의 비밀값 검사에 걸리지 않도록 조각을 실행 중에 잇는다
+    const fakeRepoToken = ['ghp', 'Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9St0Uv1Wx2'].join(
+      '_',
+    );
+    const { symbols } = await pythonExtractor().extract(
+      [
+        file(
+          'worker/points_api.py',
+          `@router.get('/members/{member_id}/points')
+def member_points(member_id):
+    return requests.post(
+        f"{POINTS_URL}/ledger/{member_id}",
+        json={'memberId': member_id, 'password': 'acorn'},
+        timeout=3,
+    )
+
+
+@app.task(name='points.expire', queue=Queues.POINTS)
+def expire_points():
+    requests.get(os.environ['POINTS_URL'] + '/expire', headers={'X-Trace': '${fakeRepoToken}'})
+
+
+@register_handler('coupon')
+class CouponHandler:
+    def handle(self, event):
+        return self.store.save(event)
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(bySymbol(symbols, 'member_points').sites).toEqual([
+      {
+        kind: 'decorator',
+        name: 'router.get',
+        line: 1,
+        args: [{ text: '<literal>', literal: '/members/{member_id}/points' }],
+      },
+      {
+        kind: 'call',
+        name: 'requests.post',
+        line: 3,
+        args: [
+          {
+            text: '<literal>',
+            template: ['', '/ledger/', ''],
+            substitutions: [
+              { text: 'POINTS_URL', identifier: 'POINTS_URL' },
+              { text: 'member_id', identifier: 'member_id' },
+            ],
+          },
+          {
+            text: 'json={<literal>: member_id, <literal>: <literal>}, timeout=3',
+            properties: {
+              json: {
+                text: '{<literal>: member_id, <literal>: <literal>}',
+                properties: {
+                  memberId: { text: 'member_id', identifier: 'member_id' },
+                  password: { text: '<literal>', literal: '<redacted>' },
+                },
+              },
+              timeout: { text: '3' },
+            },
+          },
+        ],
+      },
+    ]);
+    const expire = bySymbol(symbols, 'expire_points').sites ?? [];
+    expect(expire[0]).toEqual({
+      kind: 'decorator',
+      name: 'app.task',
+      line: 10,
+      args: [
+        {
+          text: 'name=<literal>, queue=Queues.POINTS',
+          properties: {
+            name: { text: '<literal>', literal: 'points.expire' },
+            queue: { text: 'Queues.POINTS', identifier: 'Queues.POINTS' },
+          },
+        },
+      ],
+    });
+    expect(expire[1].args[0]).toEqual({
+      text: '<env> + <literal>',
+      template: ['', '/expire'],
+      substitutions: [{ text: '<env>', identifier: 'os.environ.POINTS_URL' }],
+    });
+    expect(
+      expire[1].args[1].properties?.headers.properties?.['X-Trace'],
+    ).toEqual({ text: '<literal>', literal: '<redacted>' });
+    expect(JSON.stringify(symbols.map((item) => item.sites))).not.toContain(
+      fakeRepoToken,
+    );
+    expect(bySymbol(symbols, 'CouponHandler').sites).toEqual([
+      {
+        kind: 'decorator',
+        name: 'register_handler',
+        line: 15,
+        args: [{ text: '<literal>', literal: 'coupon' }],
+      },
+    ]);
+    expect(
+      bySymbol(symbols, 'CouponHandler.handle').sites?.map((site) => site.name),
+    ).toEqual(['self.store.save']);
+  });
+
   it('맡을 파일이 없으면 python3 을 띄우지 않는다', async () => {
     const result = await pythonExtractor({
       command: join(scratch, 'never-started'),

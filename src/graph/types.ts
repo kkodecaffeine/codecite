@@ -131,6 +131,47 @@ export interface ExtractedSymbol {
   relations: CodeSymbolRelation[];
   executionFacts?: ExecutionFact[];
   triggeredBy?: string[];
+  /** 호출·데코레이터 자리. 탐지 단계만 읽고 결과 레코드에는 저장하지 않는다(CodeSite 주석) */
+  sites?: CodeSite[];
+}
+
+/**
+ * 호출·생성·데코레이터 자리 하나. 프리셋 탐지기가 라우트 경로, 클라이언트 호출 주소, 큐·이벤트 이름 같은 인자 값을
+ * 정규식 없이 구문 트리에서 읽도록 추출기가 함께 돌려주는 중간 자료다. 언어와 상관없이 같은 꼴이다
+ * - 결과 레코드(CurrentSymbolRecord)의 계약은 바뀌지 않는다. sites 는 탐지에만 쓰고 결과 파일에 저장하지 않는다
+ * - 클래스 데코레이터는 클래스 심볼에, 멤버·함수 데코레이터와 그 안의 호출은 그 멤버·함수 심볼에 붙는다
+ * - name 은 받는 쪽까지 적은 원문이다(`axios.post`, `this.http.get`, `router.get`, `Get`, `app.task`)
+ * - 인자의 literal·template·properties 값은 추출기를 떠나기 전에 비밀값 모양을 `<redacted>` 로 바꾼다
+ */
+export interface CodeSite {
+  kind: CodeSiteKind;
+  name: string;
+  line: number;
+  args: CodeSiteArgument[];
+}
+
+/** call: 함수 호출, new: 생성자 호출, decorator: 데코레이터(인자가 있으면 그 인자까지) */
+export type CodeSiteKind = 'call' | 'new' | 'decorator';
+
+/**
+ * 자리의 인자 하나. text 말고는 읽을 수 있을 때만 채운다
+ * Python 키워드 인자는 맨 뒤의 인자 하나로 모으고, 그 properties 의 키가 키워드 이름이다
+ */
+export interface CodeSiteArgument {
+  /** 실행 사실과 같은 규칙으로 가린 원문. 문자열은 `<literal>`, 환경 변수 읽기는 `<env>` */
+  text: string;
+  /** 문자열 리터럴의 값 */
+  literal?: string;
+  /** 템플릿 문자열이나 문자열 더하기의 고정 조각. 치환 자리 사이의 글이라 substitutions 보다 하나 많다 */
+  template?: string[];
+  /** 템플릿의 치환 자리. template 의 조각 사이에 차례로 들어간다 */
+  substitutions?: CodeSiteArgument[];
+  /** 이름 하나나 멤버 연쇄(`ORDER_QUEUE`, `Queues.ORDER`, `this.queueName`). 환경 변수 읽기는 `process.env.이름`, `os.environ.이름` 꼴 */
+  identifier?: string;
+  /** 객체 리터럴·딕셔너리의 키 → 값 */
+  properties?: Record<string, CodeSiteArgument>;
+  /** 배열·리스트·튜플의 원소 */
+  elements?: CodeSiteArgument[];
 }
 
 export interface ExtractionFailure {

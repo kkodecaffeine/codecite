@@ -137,7 +137,14 @@ function fakeExtractor(calls: SourceFile[][] = []): SymbolExtractor {
               lineEnd: index + 1,
               relations: [],
               // 탐지 단계가 쓰는 중간 데이터. 결과 파일에는 들어가면 안 된다
-              sites: [{ kind: 'call', callee: 'acornQueue.push' }],
+              sites: [
+                {
+                  kind: 'call',
+                  name: 'acornQueue.push',
+                  line: index + 1,
+                  args: [],
+                },
+              ],
             } as ExtractedSymbol);
           }
         }

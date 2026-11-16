@@ -4,6 +4,7 @@ import type {
   ExecutionFact,
 } from '../../extensions/code-knowledge.js';
 import type {
+  CodeSite,
   ExtractedSymbol,
   ExtractionFailure,
   ExtractionResult,
@@ -19,9 +20,11 @@ import {
   MAX_CALL_RELATIONS,
   MAX_DECLARATION_CONTENT_LENGTH,
   MAX_FACT_TEXT_LENGTH,
+  MAX_SITES_PER_SYMBOL,
   SIMPLE_NEGATION_PATTERN,
   WHOLE_MODULE_IMPORT,
 } from './constants.js';
+import { redactSiteSecrets } from './site-secrets.js';
 import type { RawRelation } from './types.js';
 
 /** IMPORTS 대상 원문. 가져온 꼴이 없으면 모듈 전체를 읽은 것으로 적는다 */
@@ -105,6 +108,29 @@ function normalizeFact(fact: ExecutionFact): ExecutionFact {
     ...(value ? { value } : {}),
     ...(conditions.length > 0 ? { conditions } : {}),
   };
+}
+
+/**
+ * 호출·데코레이터 자리의 인자 값에서 비밀값 모양을 가리고, 같은 자리를 합친 뒤 줄 번호로 정렬해 한도에서 자른다
+ * 같은 줄 안에서는 들어온 순서를 지킨다. 추출기는 자리를 내보내기 전에 반드시 이 함수를 거친다
+ */
+export function finalizeSites(sites: readonly CodeSite[]): CodeSite[] {
+  const seen = new Set<string>();
+  const unique: Array<{ site: CodeSite; index: number }> = [];
+  for (const site of redactSiteSecrets(sites)) {
+    const key = JSON.stringify(site);
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push({ site, index: unique.length });
+    }
+  }
+  return unique
+    .sort(
+      (left, right) =>
+        left.site.line - right.site.line || left.index - right.index,
+    )
+    .slice(0, MAX_SITES_PER_SYMBOL)
+    .map(({ site }) => site);
 }
 
 /** 관계에 저장소를 붙이고, 같은 관계를 합치고, 종류·대상 순으로 정렬한다. CALLS 만 한도에서 자른다 */

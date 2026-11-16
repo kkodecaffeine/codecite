@@ -1,6 +1,7 @@
 // 언어 추출기 안에서 주고받는 모양. 공개 결과 모양은 ../types.ts 의 ExtractedSymbol 이다
 import type TypeScript from 'typescript';
 import type { ExecutionFact } from '../../extensions/code-knowledge.js';
+import type { CodeSite, CodeSiteArgument } from '../types.js';
 import type {
   CONDITION_LABELS,
   EXTRACTED_RELATION_TYPES,
@@ -64,6 +65,28 @@ export interface TypeScriptFactProjector {
   callee(expression: TypeScript.Expression): string | undefined;
 }
 
+/** 구문 트리에서 호출·생성·데코레이터 자리를 읽는 도구. 값은 아직 비밀값을 가리지 않은 상태다 */
+export interface TypeScriptSiteReader {
+  /** 노드 안의 모든 호출·생성·데코레이터 자리(콜백 안 포함). 안쪽 클래스는 보지 않는다 */
+  sites(sourceFile: TypeScript.SourceFile, node: TypeScript.Node): CodeSite[];
+  /** 노드에 바로 붙은 데코레이터 자리만 */
+  decoratorSites(
+    sourceFile: TypeScript.SourceFile,
+    node: TypeScript.Node,
+  ): CodeSite[];
+  /** 식 하나를 자리 인자로 읽는다 */
+  argument(
+    sourceFile: TypeScript.SourceFile,
+    node: TypeScript.Expression,
+  ): CodeSiteArgument;
+}
+
+/** 파일마다 쓰는 구문 트리 도구. typescript 를 불러온 뒤 추출 한 번에 한 번 만든다 */
+export interface TypeScriptReaderTools {
+  projector: TypeScriptFactProjector;
+  siteReader: TypeScriptSiteReader;
+}
+
 // ── Python 도우미와 주고받는 JSON ──
 
 /** 도우미가 TypeScript 쪽과 같은 꼴로 적도록 넘기는 값. 상수는 constants.ts 한 곳에만 둔다 */
@@ -80,6 +103,9 @@ export interface PythonExtractSettings {
   importSeparator: string;
   wholeModuleImport: string;
   recursionLimit: number;
+  maxSiteArgumentDepth: number;
+  maxSiteArgumentEntries: number;
+  maxSiteLiteralLength: number;
 }
 
 export interface PythonExtractRequest {
@@ -96,6 +122,8 @@ export interface PythonSymbolPayload {
   description?: string;
   relations: RawRelation[];
   facts?: ExecutionFact[];
+  /** 비밀값 가리기 전의 자리. Node 쪽에서 가린 뒤 내보낸다 */
+  sites?: CodeSite[];
 }
 
 /** 파일 하나의 결과. 구문 오류면 error 만 있다 */

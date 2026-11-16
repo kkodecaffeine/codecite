@@ -346,6 +346,146 @@ def body_facts(node):
     return facts.items
 
 
+def clip_literal(value):
+    limit = S['maxSiteLiteralLength']
+    if len(value) <= limit:
+        return value
+    return value[:limit - len(S['clippedMark'])] + S['clippedMark']
+
+
+def name_chain(node):
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        owner = name_chain(node.value)
+        return None if owner is None else owner + '.' + node.attr
+    return None
+
+
+def env_identifier(node):
+    # os.environ['X'], os.getenv('X'), os.environ.get('X') 를 os.environ.X 로 적는다
+    key = None
+    if isinstance(node, ast.Subscript) and callee(node.value) == S['env']:
+        key = node.slice
+    elif isinstance(node, ast.Call) and node.args:
+        name = callee(node.func)
+        if name in ENV_CALLS or name == S['env'] + '.get':
+            key = node.args[0]
+    if isinstance(key, ast.Constant) and isinstance(key.value, str):
+        return 'os.environ.' + key.value
+    return None
+
+
+def is_string_piece(node):
+    return isinstance(node, ast.JoinedStr) or (isinstance(node, ast.Constant) and isinstance(node.value, str))
+
+
+def concatenation(node):
+    # 'a' + b + f'c' 를 더하기 순서대로 펼친다. 문자열이 하나도 없으면 None
+    if not (isinstance(node, ast.BinOp) and isinstance(node.op, ast.Add)):
+        return None
+    operands = []
+
+    def flatten(current):
+        if isinstance(current, ast.BinOp) and isinstance(current.op, ast.Add):
+            flatten(current.left)
+            flatten(current.right)
+        else:
+            operands.append(current)
+
+    flatten(node)
+    return operands if any(is_string_piece(item) for item in operands) else None
+
+
+def site_argument(node, depth=0):
+    result = {'text': text(node)}
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        result['literal'] = clip_literal(node.value)
+        return result
+    pieces = [node] if isinstance(node, ast.JoinedStr) else concatenation(node)
+    if pieces:
+        template = ['']
+        substitutions = []
+        for piece in pieces:
+            values = piece.values if isinstance(piece, ast.JoinedStr) else [piece]
+            for value in values:
+                if isinstance(value, ast.Constant) and isinstance(value.value, str):
+                    template[-1] += value.value
+                else:
+                    inner = value.value if isinstance(value, ast.FormattedValue) else value
+                    substitutions.append(site_argument(inner, depth + 1))
+                    template.append('')
+        result['template'] = [clip_literal(item) for item in template]
+        result['substitutions'] = substitutions
+        return result
+    identifier = env_identifier(node) or name_chain(node)
+    if identifier and identifier not in ('self', 'cls'):
+        result['identifier'] = identifier
+        return result
+    if depth >= S['maxSiteArgumentDepth']:
+        return result
+    limit = S['maxSiteArgumentEntries']
+    if isinstance(node, ast.Dict):
+        properties = {}
+        for key, value in zip(node.keys, node.values):
+            if len(properties) >= limit:
+                break
+            if isinstance(key, ast.Constant) and isinstance(key.value, (str, int)) and not isinstance(key.value, bool):
+                properties[str(key.value)] = site_argument(value, depth + 1)
+        if properties:
+            result['properties'] = properties
+    elif isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+        result['elements'] = [site_argument(item, depth + 1) for item in node.elts[:limit]]
+    return result
+
+
+def site_arguments(call):
+    # 키워드 인자는 맨 뒤의 인자 하나로 모은다. 키는 키워드 이름이다
+    arguments = [site_argument(item) for item in call.args]
+    if call.keywords:
+        words = ', '.join((item.arg + '=' if item.arg else '**') + text(item.value) for item in call.keywords)
+        keyword = {'text': collapse(words)}
+        named = [item for item in call.keywords if item.arg][:S['maxSiteArgumentEntries']]
+        if named:
+            keyword['properties'] = {item.arg: site_argument(item.value, 1) for item in named}
+        arguments.append(keyword)
+    return arguments
+
+
+def decorator_site(item):
+    call = item if isinstance(item, ast.Call) else None
+    name = relation_name(call.func if call else item)
+    if not name:
+        return None
+    return {'kind': 'decorator', 'name': name, 'line': item.lineno,
+            'args': site_arguments(call) if call else []}
+
+
+def decorator_sites(node):
+    return [site for site in (decorator_site(item) for item in node.decorator_list) if site]
+
+
+def collect_sites(node):
+    # 노드 안의 호출과 데코레이터 자리. 안쪽 클래스는 보지 않는다
+    sites = []
+
+    def visit(current):
+        decorators = getattr(current, 'decorator_list', [])
+        sites.extend(decorator_sites(current) if decorators else [])
+        skipped = {id(item) for item in decorators}
+        for child in ast.iter_child_nodes(current):
+            if id(child) not in skipped and not isinstance(child, ast.ClassDef):
+                visit(child)
+        if isinstance(current, ast.Call):
+            name = relation_name(current.func)
+            if name:
+                line = current.func.end_lineno if isinstance(current.func, ast.Attribute) else current.lineno
+                sites.append({'kind': 'call', 'name': name, 'line': line, 'args': site_arguments(current)})
+
+    visit(node)
+    return sites
+
+
 def import_target(specifier, imported):
     return (imported or S['wholeModuleImport']) + S['importSeparator'] + specifier
 
@@ -423,7 +563,8 @@ class FileReader:
                 self.read_class(node)
             elif isinstance(node, FUNCTION_NODES):
                 if 'overload' not in [leaf(name) for name in decorator_names(node)]:
-                    self.add(node, node.name, 'function', self.function_relations(node), body_facts(node))
+                    self.add(node, node.name, 'function', self.function_relations(node), body_facts(node),
+                             collect_sites(node))
             else:
                 name, value = assignment_parts(node)
                 if name is not None:
@@ -448,14 +589,14 @@ class FileReader:
                 if name is not None:
                     facts.append({'line': member.lineno, 'kind': 'assigns',
                                   'subject': node.name + '.' + name, 'value': value_text(value)})
-        self.add(node, node.name, kind, relations, facts)
+        self.add(node, node.name, kind, relations, facts, decorator_sites(node))
         for member in node.body:
             if isinstance(member, FUNCTION_NODES):
                 names = [leaf(name) for name in decorator_names(member)]
                 if 'overload' in names:
                     continue
                 self.add(member, node.name + '.' + member.name + self.accessor_suffix(member),
-                         'method', self.function_relations(member), body_facts(member))
+                         'method', self.function_relations(member), body_facts(member), collect_sites(member))
             elif kind != 'enum':
                 name, value = assignment_parts(member)
                 if name is not None:
@@ -474,10 +615,12 @@ class FileReader:
     def add_value(self, node, name, value):
         if isinstance(value, ast.Lambda):
             relations = self.import_relations(node) + self.call_relations(value)
-            self.add(node, name, 'method' if '.' in name else 'function', relations, body_facts(value))
+            self.add(node, name, 'method' if '.' in name else 'function', relations, body_facts(value),
+                     collect_sites(node))
             return
         facts = [{'line': node.lineno, 'kind': 'assigns', 'subject': name, 'value': value_text(value)}]
-        self.add(node, name, 'constant', self.import_relations(node) + self.call_relations(value), facts)
+        self.add(node, name, 'constant', self.import_relations(node) + self.call_relations(value), facts,
+                 collect_sites(node))
 
     def function_relations(self, node):
         relations = self.import_relations(node)
@@ -530,7 +673,7 @@ class FileReader:
         )
         return start, ast.get_source_segment(self.source, span) or ''
 
-    def add(self, node, name, kind, relations, facts):
+    def add(self, node, name, kind, relations, facts, sites):
         start, content = self.segment(node)
         symbol = {
             'symbol': name,
@@ -546,6 +689,8 @@ class FileReader:
                 symbol['description'] = description
         if facts is not None:
             symbol['facts'] = facts
+        if sites:
+            symbol['sites'] = sites
         self.symbols.append(symbol)
 
 

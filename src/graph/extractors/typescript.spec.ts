@@ -443,4 +443,61 @@ module.exports = function shippingRouter() {
     expect(zones.content.endsWith('};')).toBe(true);
     expect(bySymbol(symbols, 'sumFees').content).toContain('total += 2999;');
   });
+
+  it('호출·데코레이터 자리를 그 심볼에 붙이고, 비밀값 모양 인자는 가려서 내보낸다', async () => {
+    // 저장소의 비밀값 검사에 걸리지 않도록 조각을 실행 중에 잇는다
+    const fakeLiveKey = ['sk', 'live', 'Dotori1Acorn2Market3Shop4'].join('_');
+    const { symbols } = await typescriptExtractor().extract(
+      [
+        file(
+          'src/coupons/coupon.controller.ts',
+          `@Controller('coupons')
+export class CouponController {
+  @Post(':id/redeem')
+  redeem(@Param('id') id: string) {
+    return couponGateway.charge('${fakeLiveKey}', { couponId: id });
+  }
+}
+
+export const couponClient = axios.create({ baseURL: process.env.COUPON_API_URL });
+
+export enum CouponState {
+  Open,
+  Used,
+}
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(bySymbol(symbols, 'CouponController').sites).toEqual([
+      {
+        kind: 'decorator',
+        name: 'Controller',
+        line: 1,
+        args: [{ text: '<literal>', literal: 'coupons' }],
+      },
+    ]);
+    const redeem = bySymbol(symbols, 'CouponController.redeem');
+    expect(redeem.sites?.map((site) => [site.kind, site.name])).toEqual([
+      ['decorator', 'Post'],
+      ['decorator', 'Param'],
+      ['call', 'couponGateway.charge'],
+    ]);
+    expect(redeem.sites?.[2].args[0]).toEqual({
+      text: '<literal>',
+      literal: '<redacted>',
+    });
+    expect(JSON.stringify(symbols.map((item) => item.sites))).not.toContain(
+      fakeLiveKey,
+    );
+    expect(bySymbol(symbols, 'couponClient').sites?.[0].args[0]).toEqual({
+      text: '{ baseURL: <env> }',
+      properties: {
+        baseURL: { text: '<env>', identifier: 'process.env.COUPON_API_URL' },
+      },
+    });
+    expect(bySymbol(symbols, 'CouponState').sites).toBeUndefined();
+  });
 });

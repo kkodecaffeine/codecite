@@ -136,7 +136,12 @@ describe('toCurrentSymbolRecord', () => {
     const withSites = {
       ...symbol(),
       sites: [
-        { kind: 'call', callee: 'acornQueue.push', arguments: ['refund'] },
+        {
+          kind: 'call',
+          name: 'acornQueue.push',
+          line: 1,
+          args: [{ text: '<literal>', literal: 'refund' }],
+        },
       ],
       parserState: { depth: 2 },
     } as ExtractedSymbol;

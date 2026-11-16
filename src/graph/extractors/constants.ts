@@ -97,6 +97,58 @@ export const CONDITION_LABELS = {
 export const SIMPLE_NEGATION_PATTERN =
   /^!\s*([A-Za-z_$#][\w$]*(?:\??\.[A-Za-z_$#][\w$]*)*)$/;
 
+/** 호출·데코레이터 자리(sites)의 한도. 탐지에 필요한 만큼만 남겨 큰 인자가 결과를 부풀리지 않게 한다 */
+export const MAX_SITES_PER_SYMBOL = 300;
+/** 객체·배열 인자를 펼치는 깊이와 한 단계에서 남기는 키·원소 수 */
+export const MAX_SITE_ARGUMENT_DEPTH = 4;
+export const MAX_SITE_ARGUMENT_ENTRIES = 50;
+/** 모듈을 읽는 호출. IMPORTS 관계로 따로 남기므로 호출 자리로 내지 않는다 */
+export const MODULE_LOADER_CALLEES: readonly string[] = ['require', 'import'];
+/** 자리 인자의 문자열 값 길이 한도 */
+export const MAX_SITE_LITERAL_LENGTH = 500;
+
+/**
+ * 자리 인자 값의 비밀값 가리기. 파이프라인의 원문 가리기와 따로, 추출기를 떠나는 값만 본다
+ * 맞은 부분은 REDACTED_PLACEHOLDER 로 바꾸고, 주소의 사용자 정보는 그 부분만 바꿔 경로는 남긴다
+ */
+export const REDACTED_PLACEHOLDER = '<redacted>';
+/** 잘 알려진 토큰 머리말(결제·저장소·메신저·클라우드 키, JWT, 개인 키, 인증 머리) */
+export const SECRET_TOKEN_PATTERNS: readonly RegExp[] = [
+  /\b(?:sk|pk|rk)_(?:live|test)_[A-Za-z0-9]{8,}/g,
+  /\bgh[pousr]_[A-Za-z0-9]{20,}/g,
+  /\bgithub_pat_[A-Za-z0-9_]{20,}/g,
+  /\bxox[abposr]-[A-Za-z0-9-]{10,}/g,
+  /\bAKIA[0-9A-Z]{16}\b/g,
+  /\bAIza[0-9A-Za-z_-]{30,}/g,
+  /\bsk-[A-Za-z0-9_-]{20,}/g,
+  /\beyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]+/g,
+  /-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?(?:-----END [A-Z ]*PRIVATE KEY-----|$)/g,
+  /\b(?:Bearer|Basic)\s+[A-Za-z0-9._~+/=-]{16,}/g,
+];
+/** `scheme://사용자:비밀번호@` 의 사용자 정보 */
+export const URL_USERINFO_PATTERN = /\b([a-z][a-z0-9+.-]*:\/\/)[^/\s@]+@/gi;
+/** 32 자 이상 이어진 16 진수 */
+export const HEX_RUN_PATTERN = /\b[0-9a-f]{32,}\b/gi;
+/** 무작위처럼 보이는지 따져 볼 글자 묶음. 이름·경로와 가르려고 글자 종류가 바뀌는 비율과 엔트로피를 함께 본다 */
+export const RANDOM_RUN_PATTERN = /[A-Za-z0-9_+/=-]{24,}/g;
+export const RANDOM_RUN_MIN_CLASS_CHANGE_RATIO = 0.4;
+export const RANDOM_RUN_MIN_ENTROPY = 3.5;
+/** 이 낱말이 들어간 키(대소문자·`_`·`-` 무시) 아래의 값은 모양과 상관없이 가린다 */
+export const SECRET_KEY_WORDS: readonly string[] = [
+  'token',
+  'secret',
+  'password',
+  'passwd',
+  'apikey',
+  'accesskey',
+  'privatekey',
+  'credential',
+  'authorization',
+  'cookie',
+  'signature',
+  'sessionid',
+];
+
 /** IMPORTS 대상에서 가져온 꼴과 모듈 지정자를 가르는 말, 그리고 이름 없이 모듈 전체를 읽을 때 쓰는 가져온 꼴 */
 export const IMPORT_TARGET_SEPARATOR = ' from ';
 export const WHOLE_MODULE_IMPORT = '*';
@@ -143,4 +195,7 @@ export const PYTHON_EXTRACT_SETTINGS: PythonExtractSettings = {
   importSeparator: IMPORT_TARGET_SEPARATOR,
   wholeModuleImport: WHOLE_MODULE_IMPORT,
   recursionLimit: PYTHON_RECURSION_LIMIT,
+  maxSiteArgumentDepth: MAX_SITE_ARGUMENT_DEPTH,
+  maxSiteArgumentEntries: MAX_SITE_ARGUMENT_ENTRIES,
+  maxSiteLiteralLength: MAX_SITE_LITERAL_LENGTH,
 };

@@ -24,6 +24,7 @@ import {
   finalizeExtraction,
   finalizeFacts,
   finalizeRelations,
+  finalizeSites,
   hasExtension,
 } from './normalize.js';
 import { PYTHON_EXTRACTOR_SCRIPT } from './python-script.js';
@@ -92,6 +93,8 @@ function toSymbol(
 ): ExtractedSymbol {
   const executable = EXECUTABLE_SYMBOL_KINDS.includes(payload.kind);
   const facts = finalizeFacts(payload.facts ?? []);
+  // 도우미가 낸 인자 값은 아직 가리지 않은 상태라 여기서 가린 뒤 내보낸다
+  const sites = finalizeSites(payload.sites ?? []);
   return {
     filePath,
     language: 'python',
@@ -107,6 +110,7 @@ function toSymbol(
     ...(payload.description ? { description: payload.description } : {}),
     relations: finalizeRelations(repository, payload.relations),
     ...(executable || facts.length > 0 ? { executionFacts: facts } : {}),
+    ...(sites.length > 0 ? { sites } : {}),
   };
 }
 
