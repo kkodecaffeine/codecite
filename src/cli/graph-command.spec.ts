@@ -212,6 +212,18 @@ describe('codecite graph build', { timeout: 60_000 }, () => {
       'utf8',
     );
     expect(topology).toContain('/orders');
+
+    const valid = await cli(['graph', 'validate']);
+    expect(valid.code).toBe(0);
+    expect(valid.stdout).toContain('OK: 0 errors');
+
+    await writeFile(
+      join(folder, '.codecite', 'graph', 'manifest.json'),
+      '{"schemaVersion":1}\n',
+    );
+    const broken = await cli(['graph', 'validate']);
+    expect(broken.code).toBe(1);
+    expect(broken.stdout).toContain('FAILED:');
   });
 
   it('설정 파일이 없으면 graph init 을 안내하고 1 로 끝난다', async () => {

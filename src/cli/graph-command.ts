@@ -2,6 +2,7 @@
 import { access, readFile, writeFile } from 'node:fs/promises';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
 import {
+  EXIT_FAILURE,
   EXIT_OK,
   GRAPH_INIT_NODE_BASE_PRESETS,
   GRAPH_INIT_NODE_PRESETS,
@@ -146,13 +147,46 @@ export const graphBuildCommand: CliLeafCommand = {
   },
 };
 
+/** `codecite graph validate`: 결과 폴더가 계약 모양·참조·순서 규칙을 지키는지, 절대 경로·비밀값이 없는지 본다 */
+export const graphValidateCommand: CliLeafCommand = {
+  name: 'validate',
+  summary: 'Check the graph output against the contract and safety rules',
+  usage: '[--config <file>]',
+  description: [
+    'Checks that every output file has the contract shape, that references (edges, manual',
+    'links, field writers) point at existing symbols, that files are in their stable order,',
+    'and that no absolute path or secret-looking value was written.',
+    'Exit code 1 when there is an error; warnings alone exit 0.',
+  ],
+  options: { config: CONFIG_OPTION },
+  async run(context) {
+    rejectPositionals(context);
+    const graph = await import('../graph/index.js');
+    const config = await graph.loadGraphConfig(context.cwd, {
+      file: configPath(context),
+    });
+    const result = await graph.validateGraphOutput(config.output, { config });
+    const lines = [
+      ...result.errors.map(
+        (issue) => `error    ${issue.check}  ${issue.file}: ${issue.message}`,
+      ),
+      ...result.warnings.map(
+        (issue) => `warning  ${issue.check}  ${issue.file}: ${issue.message}`,
+      ),
+      `${result.ok ? 'OK' : 'FAILED'}: ${result.errors.length} errors, ${result.warnings.length} warnings in ${displayPath(context.cwd, config.output)}`,
+    ];
+    context.io.stdout(`${lines.join('\n')}\n`);
+    return result.ok ? EXIT_OK : EXIT_FAILURE;
+  },
+};
+
 export const graphCommand: CliCommandGroup = {
   name: 'graph',
   summary: 'Build a call and relation graph across your repositories',
   description: [
     'Reads codecite.graph.json (see "codecite graph init") and writes the graph output folder.',
   ],
-  commands: [graphInitCommand, graphBuildCommand],
+  commands: [graphInitCommand, graphBuildCommand, graphValidateCommand],
 };
 
 function configPath(context: CliContext): string {
