@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { PolicyChunk } from '../domain/policy-chunk.js';
 import type { PolicyEvidence } from '../generation/types.js';
@@ -19,6 +20,38 @@ import type {
   SystemTopologyGraph,
   TemporalCodeIndex,
 } from './code-knowledge.js';
+import type {
+  ConversationTurn,
+  DialogueMemory,
+  DialogueMemoryRecord,
+  ThreadContext,
+  ThreadContextSnapshot,
+} from './conversation.js';
+import type {
+  AnswerFeedback,
+  AnswerRecord,
+  ExperienceCase,
+  ExperienceCaseStore,
+  FeedbackReason,
+  FeedbackReport,
+} from './feedback.js';
+import type {
+  InventoryCatalog,
+  InventoryCatalogSource,
+  OfficialPolicyDocumentSource,
+} from './catalog.js';
+import type {
+  KnowledgeRefreshRequest,
+  KnowledgeRefreshRun,
+  KnowledgeRefreshTrigger,
+} from './knowledge-refresh.js';
+import type {
+  RunObservation,
+  RunObserver,
+  RuntimeBackup,
+  RuntimeCache,
+  RuntimeCacheEntry,
+} from './observability.js';
 import type { Reranker } from './reranker.js';
 import {
   DEFAULT_RESEARCH_BUDGET,
@@ -644,5 +677,511 @@ describe('재정렬 계약', () => {
     const result = await brokenReranker.rerank('배송', shippingCandidates);
 
     expect(result).toEqual({ status: 'unavailable', reason: 'timeout' });
+  });
+});
+
+// ── 대화 계약 ──
+
+function inMemoryThreadContext(now: () => number): ThreadContext {
+  const store = new Map<string, ThreadContextSnapshot>();
+  return {
+    async load(threadKey) {
+      const snapshot = store.get(threadKey);
+      return snapshot && snapshot.expiresAt > now() ? snapshot : undefined;
+    },
+    async save(threadKey, turns) {
+      store.set(threadKey, { turns, expiresAt: now() + 60_000 });
+    },
+  };
+}
+
+function inMemoryDialogueMemory(): DialogueMemory {
+  const records: DialogueMemoryRecord[] = [];
+  return {
+    async record(record) {
+      records.push(record);
+    },
+    async searchSimilar(question, limit) {
+      const words = question.split(/\s+/u);
+      return records
+        .filter((record) => record.clarificationQuestion !== null)
+        .filter((record) =>
+          words.some((word) => record.questionText.includes(word)),
+        )
+        .slice(0, limit)
+        .map((record) => ({
+          question: record.questionText,
+          clarificationQuestion: record.clarificationQuestion ?? '',
+        }));
+    },
+  };
+}
+
+const membershipTurns: ConversationTurn[] = [
+  { role: 'user', content: '도토리 마켓 골드 등급은 어떻게 올라가요?' },
+  {
+    role: 'assistant',
+    content: '누적 주문 금액이 등급 기준을 넘으면 다음 등급으로 오릅니다.',
+  },
+];
+
+function dialogueRecord(
+  caseId: string,
+  questionText: string,
+  clarificationQuestion: string | null,
+): DialogueMemoryRecord {
+  return {
+    schemaVersion: 1,
+    caseId,
+    questionText,
+    resolvedQuestionText: questionText,
+    conversationTurns: [],
+    clarificationQuestion,
+    state: clarificationQuestion ? 'clarifying' : 'answered',
+    answerHash: `answer-${caseId}`,
+    citationCount: clarificationQuestion ? 0 : 1,
+    recordedAt: '2026-11-16T00:00:00Z',
+  };
+}
+
+describe('대화 계약', () => {
+  it('스레드 문맥은 만료 전까지만 앞 턴을 돌려준다', async () => {
+    let clock = 1_000;
+    const context = inMemoryThreadContext(() => clock);
+
+    await context.save('thread-membership', membershipTurns);
+    expect((await context.load('thread-membership'))?.turns).toEqual(
+      membershipTurns,
+    );
+
+    clock += 120_000;
+    expect(await context.load('thread-membership')).toBeUndefined();
+    expect(await context.load('thread-unknown')).toBeUndefined();
+  });
+
+  it('대화 기억은 되물었던 사례만 힌트로 돌려준다', async () => {
+    const memory = inMemoryDialogueMemory();
+    await memory.record(
+      dialogueRecord(
+        'case-1',
+        '그 쿠폰 언제까지 써요?',
+        '가입 축하 쿠폰과 리뷰 감사 쿠폰 중 어느 것을 물으셨나요?',
+      ),
+    );
+    await memory.record(
+      dialogueRecord('case-2', '리뷰 감사 쿠폰은 언제까지 써요?', null),
+    );
+
+    const hints = await memory.searchSimilar('쿠폰 언제까지', 5);
+
+    expect(hints).toEqual([
+      {
+        question: '그 쿠폰 언제까지 써요?',
+        clarificationQuestion:
+          '가입 축하 쿠폰과 리뷰 감사 쿠폰 중 어느 것을 물으셨나요?',
+      },
+    ]);
+  });
+});
+
+// ── 피드백 계약 ──
+
+interface StoredAnswer {
+  record: AnswerRecord;
+  feedback?: AnswerFeedback;
+  reason?: FeedbackReason;
+  comment?: string;
+}
+
+function inMemoryFeedbackReport(): {
+  report: FeedbackReport;
+  stored: Map<string, StoredAnswer>;
+} {
+  const stored = new Map<string, StoredAnswer>();
+  const report: FeedbackReport = {
+    async recordAnswer(record) {
+      const reportId = `report-${stored.size + 1}`;
+      stored.set(reportId, { record });
+      return reportId;
+    },
+    async findAnswer(answerKey) {
+      return [...stored].find(
+        ([, entry]) => entry.record.answerKey === answerKey,
+      )?.[0];
+    },
+    async recordFeedback(reportId, feedback) {
+      const entry = stored.get(reportId);
+      if (entry) {
+        entry.feedback = feedback;
+      }
+    },
+    async updateReason(reportId, reason, comment) {
+      const entry = stored.get(reportId);
+      if (entry) {
+        entry.reason = reason;
+        entry.comment = comment;
+      }
+    },
+  };
+  return { report, stored };
+}
+
+function inMemoryExperienceCases(): ExperienceCaseStore {
+  const cases = new Map<string, ExperienceCase>();
+  return {
+    record(experienceCase) {
+      const previous = cases.get(experienceCase.caseId);
+      cases.set(experienceCase.caseId, {
+        ...experienceCase,
+        occurrenceCount:
+          (previous?.occurrenceCount ?? 0) + experienceCase.occurrenceCount,
+      });
+    },
+    async searchSimilar(query, limit) {
+      return [...cases.values()]
+        .filter((item) => item.queryText?.includes(query))
+        .slice(0, limit);
+    },
+    async updateStatus(caseId, status) {
+      const found = cases.get(caseId);
+      if (found) {
+        cases.set(caseId, { ...found, status });
+      }
+    },
+  };
+}
+
+describe('피드백 계약', () => {
+  it('평가는 답 기록에 붙고, 같은 기록의 평가는 마지막 것으로 바뀐다', async () => {
+    const { report, stored } = inMemoryFeedbackReport();
+    const reportId = await report.recordAnswer({
+      answerKey: 'room-7:1731700000.000100',
+      kind: 'answer',
+      question: '도토리 마켓 해외 직구 상품도 반품할 수 있어요?',
+      answer: '받은 날부터 열흘 안에 반품을 신청할 수 있습니다.',
+      evidenceIds: ['refund-04'],
+      generation: 'llm',
+      answeredAt: '2026-11-16T03:00:00Z',
+    });
+
+    const foundId = await report.findAnswer('room-7:1731700000.000100');
+    await report.recordFeedback(foundId!, {
+      rating: 'helpful',
+      reportedAt: '2026-11-16T03:01:00Z',
+    });
+    await report.recordFeedback(foundId!, {
+      rating: 'unhelpful',
+      reviewerName: '다람',
+      reportedAt: '2026-11-16T03:02:00Z',
+    });
+    await report.updateReason(
+      foundId!,
+      'incomplete_answer',
+      '직구 상품은 왕복 배송비를 고객이 낸다는 말이 빠졌어요',
+    );
+
+    expect(foundId).toBe(reportId);
+    expect(stored.get(reportId!)?.feedback?.rating).toBe('unhelpful');
+    expect(stored.get(reportId!)?.reason).toBe('incomplete_answer');
+  });
+
+  it('경험 사례는 같은 사례를 모아 횟수를 세고 사람이 상태를 정한다', async () => {
+    const store = inMemoryExperienceCases();
+    const repeated: ExperienceCase = {
+      schemaVersion: 1,
+      caseId: 'exp-shipping-delay',
+      queryHash: 'q-5d1e',
+      queryText: '배송 지연 보상',
+      outcome: 'abstained',
+      signals: ['abstention'],
+      source: 'runtime_signal',
+      status: 'candidate',
+      occurrenceCount: 1,
+    };
+
+    await store.record(repeated);
+    await store.record(repeated);
+    await store.updateStatus('exp-shipping-delay', 'verified');
+    const [found] = await store.searchSimilar('배송 지연', 3);
+
+    expect(found?.occurrenceCount).toBe(2);
+    expect(found?.status).toBe('verified');
+  });
+});
+
+// ── 관측·런타임 계약 ──
+
+function hashOf(text: string): string {
+  return createHash('sha256').update(text).digest('hex').slice(0, 12);
+}
+
+function observationFor(
+  question: string,
+  answer: string,
+  stageMs: Record<string, number>,
+): RunObservation {
+  return {
+    schemaVersion: 1,
+    requestId: 'req-local-1',
+    queryHash: hashOf(question),
+    outcome: 'answered',
+    signals: [],
+    elapsedMs: Object.values(stageMs).reduce((sum, ms) => sum + ms, 0),
+    stageMs,
+    answerHash: hashOf(answer),
+    answerLength: answer.length,
+    citationCount: 1,
+  };
+}
+
+function inMemoryRuntimeCache(now: () => number): RuntimeCache {
+  const entries = new Map<string, RuntimeCacheEntry<unknown>>();
+  return {
+    async get<T>(namespace: string, key: string) {
+      const entry = entries.get(`${namespace}/${key}`);
+      return entry && entry.expiresAt > now()
+        ? (entry as RuntimeCacheEntry<T>)
+        : undefined;
+    },
+    async set(namespace, key, value, expiresAt) {
+      entries.set(`${namespace}/${key}`, { value, expiresAt });
+    },
+  };
+}
+
+describe('관측·런타임 계약', () => {
+  it('관측 기록은 질문 본문 없이 해시와 단계별 시간만 남긴다', async () => {
+    const recorded: RunObservation[] = [];
+    const observer: RunObserver = {
+      record(observation) {
+        recorded.push(observation);
+      },
+    };
+    const question = '도토리 마켓 실버 등급은 무료 배송 쿠폰을 몇 장 받나요?';
+
+    await observer.record(
+      observationFor(question, '실버 등급은 매달 두 장을 받습니다.', {
+        retrieval: 40,
+        packing: 3,
+        generation: 900,
+      }),
+    );
+
+    expect(recorded).toHaveLength(1);
+    expect(JSON.stringify(recorded[0])).not.toContain('실버 등급');
+    expect(recorded[0]?.elapsedMs).toBe(943);
+  });
+
+  it('런타임 캐시는 만료된 값을 없는 것으로 보고, 백업은 요청만 받는다', async () => {
+    let clock = 0;
+    let backups = 0;
+    const cache = inMemoryRuntimeCache(() => clock);
+    const backup: RuntimeBackup = {
+      async requestBackup() {
+        backups += 1;
+      },
+    };
+
+    await cache.set(
+      'question-plan',
+      'q-5d1e',
+      { searchTerms: ['배송비'] },
+      500,
+    );
+    expect(
+      (await cache.get<{ searchTerms: string[] }>('question-plan', 'q-5d1e'))
+        ?.value.searchTerms,
+    ).toEqual(['배송비']);
+
+    clock = 600;
+    expect(await cache.get('question-plan', 'q-5d1e')).toBeUndefined();
+
+    await backup.requestBackup();
+    expect(backups).toBe(1);
+  });
+});
+
+// ── 지식 갱신 계약 ──
+
+function fakeRefreshTrigger(heads: Record<string, string>): {
+  trigger: KnowledgeRefreshTrigger;
+  dispatched: KnowledgeRefreshRequest[];
+} {
+  const dispatched: KnowledgeRefreshRequest[] = [];
+  let active: KnowledgeRefreshRun | undefined;
+  const trigger: KnowledgeRefreshTrigger = {
+    async activeRun() {
+      return active;
+    },
+    async latestCommit(repository) {
+      return { branch: 'main', sha: heads[repository] ?? '' };
+    },
+    async dispatch(request) {
+      dispatched.push(request);
+      active = {
+        id: `run-${dispatched.length}`,
+        url: `https://ci.example.test/runs/${dispatched.length}`,
+        status: '진행 중',
+        createdAt: '2026-11-16T04:00:00Z',
+      };
+      return { run: active, statusUrl: 'https://ci.example.test/runs' };
+    },
+  };
+  return { trigger, dispatched };
+}
+
+async function refreshChanged(
+  trigger: KnowledgeRefreshTrigger,
+  reflected: Record<string, string>,
+): Promise<'already_latest' | 'busy' | 'started'> {
+  if (await trigger.activeRun()) {
+    return 'busy';
+  }
+  const repositories: string[] = [];
+  for (const [repository, sha] of Object.entries(reflected)) {
+    if ((await trigger.latestCommit(repository)).sha !== sha) {
+      repositories.push(repository);
+    }
+  }
+  if (repositories.length === 0) {
+    return 'already_latest';
+  }
+  await trigger.dispatch({
+    repositories,
+    rebuildEmbeddings: false,
+    requestedBy: 'maintainer-1',
+    replyTo: 'room-7:thread-42',
+  });
+  return 'started';
+}
+
+describe('지식 갱신 계약', () => {
+  it('바뀐 저장소만 갱신하고, 진행 중이면 새로 시작하지 않는다', async () => {
+    const reflected = { 'dotori-api': 'a1a1a1', 'dotori-web': 'b2b2b2' };
+    const { trigger, dispatched } = fakeRefreshTrigger({
+      'dotori-api': 'a1a1a1',
+      'dotori-web': 'c3c3c3',
+    });
+
+    expect(await refreshChanged(trigger, reflected)).toBe('started');
+    expect(dispatched[0]?.repositories).toEqual(['dotori-web']);
+    expect(await refreshChanged(trigger, reflected)).toBe('busy');
+    expect(dispatched).toHaveLength(1);
+  });
+
+  it('모든 저장소가 반영된 커밋과 같으면 이미 최신이다', async () => {
+    const { trigger, dispatched } = fakeRefreshTrigger({
+      'dotori-api': 'a1a1a1',
+    });
+
+    expect(await refreshChanged(trigger, { 'dotori-api': 'a1a1a1' })).toBe(
+      'already_latest',
+    );
+    expect(dispatched).toEqual([]);
+  });
+});
+
+// ── 목록·공식 문서 계약 ──
+
+const couponCatalog: InventoryCatalog = {
+  schemaVersion: 1,
+  generatedAt: '2026-11-01T00:00:00Z',
+  inventories: [
+    {
+      id: 'coupon-kinds',
+      title: '도토리 마켓 쿠폰 종류',
+      subjectPattern: '쿠폰.*(종류|어떤|뭐뭐)',
+      scopeNote: '고객이 쿠폰함에서 받는 쿠폰만 담고, 판매자 부담 할인은 뺀다',
+      itemNoun: '쿠폰',
+      groups: [
+        { id: 'first-order', label: '첫 주문' },
+        { id: 'activity', label: '활동 보상' },
+      ],
+      categories: [],
+      entries: [
+        {
+          id: 'first-order-coupon',
+          group: 'first-order',
+          label: '첫 주문 할인 쿠폰',
+          channel: '쿠폰함',
+          trigger: '첫 주문을 마친 다음 날 발급',
+          surface: 'dotori-web',
+          sources: [
+            {
+              repository: 'dotori-api',
+              filePath: 'src/coupon/first-order-coupon.issuer.ts',
+              symbol: 'FirstOrderCouponIssuer.issue',
+              resolved: true,
+            },
+          ],
+          resolved: true,
+        },
+        {
+          id: 'photo-review-coupon',
+          group: 'activity',
+          label: '사진 리뷰 감사 쿠폰',
+          trigger: '사진 리뷰 등록',
+          surface: 'dotori-web',
+          sources: [
+            {
+              repository: 'dotori-api',
+              filePath: 'src/review/photo-review-reward.ts',
+              symbol: 'PhotoReviewReward.grant',
+              resolved: false,
+            },
+          ],
+          resolved: false,
+        },
+      ],
+      uncoveredCandidates: [
+        {
+          repository: 'dotori-api',
+          filePath: 'src/coupon/restock-coupon.issuer.ts',
+          symbol: 'RestockCouponIssuer.issue',
+        },
+      ],
+    },
+  ],
+};
+
+const catalogSource: InventoryCatalogSource = {
+  load: async () => couponCatalog,
+};
+
+const shippingDocument: PolicyEvidence = {
+  chunkId: 'official-shipping-2',
+  policyCode: 'official-shipping-2',
+  section: '출고',
+  internalSource: 'docs/official/shipping.md#2',
+  sourceLabel: '도토리 마켓 배송 안내서',
+  text: '오후 두 시까지 결제한 주문은 그날 출고하고, 그 뒤 주문은 다음 영업일에 출고한다',
+  contextKind: 'policy',
+  policyGroup: 'shipping',
+};
+
+const officialDocuments: OfficialPolicyDocumentSource = {
+  async lookup(question) {
+    return question.includes('출고') ? [shippingDocument] : [];
+  },
+};
+
+describe('목록·공식 문서 계약', () => {
+  it('목록은 출처를 찾은 항목만 근거로 세고 새 후보는 따로 알린다', async () => {
+    const catalog = await catalogSource.load();
+    const [inventory] = catalog?.inventories ?? [];
+    const usable = inventory?.entries.filter((entry) => entry.resolved) ?? [];
+
+    expect(
+      new RegExp(inventory!.subjectPattern, 'u').test('쿠폰은 어떤 게 있어요?'),
+    ).toBe(true);
+    expect(usable.map((entry) => entry.label)).toEqual(['첫 주문 할인 쿠폰']);
+    expect(inventory?.uncoveredCandidates).toHaveLength(1);
+  });
+
+  it('공식 정책 문서는 맞는 구절이 없으면 빈 배열을 돌려준다', async () => {
+    expect(
+      await officialDocuments.lookup('오늘 주문하면 언제 출고돼요?'),
+    ).toEqual([shippingDocument]);
+    expect(await officialDocuments.lookup('적립금 유효 기간')).toEqual([]);
   });
 });
