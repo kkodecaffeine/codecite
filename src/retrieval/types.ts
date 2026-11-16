@@ -1,5 +1,6 @@
 import type { PolicyChunk } from '../domain/policy-chunk.js';
 import type { PolicyClaimFacet, PolicyContextKind } from '../domain/types.js';
+import type { PolicyEvidence } from '../generation/types.js';
 
 /** 검색 후보 하나. 순위는 1 부터 세고, 그 검색에서 나오지 않았으면 비어 있다 */
 export interface PolicyRetrievalCandidate {
@@ -51,3 +52,19 @@ export interface PreferredPolicyClaimFacets {
   primary: PolicyClaimFacet[];
   secondary: PolicyClaimFacet[];
 }
+
+/** 근거 하나가 질문 낱말을 얼마나 덮는지. subjectMatched 는 claim 주제와 기능 이름만 본 수다 */
+export interface QuestionCoverage {
+  item: PolicyEvidence;
+  index: number;
+  matched: number;
+  coverage: number;
+  subjectMatched: number;
+}
+
+/** 수량 질문이 묻는 단위. 개수·금액·비율을 가려 같은 단위의 claim 만 답으로 본다 */
+export type AmountUnitIntent = 'count' | 'money' | 'rate' | 'unspecified';
+
+/** 시간 질문이 묻는 모양. 시각 범위·시각 하나·걸리는 기간을 가린다 */
+export type TimeUnitIntent =
+  'clock-range' | 'clock-point' | 'duration' | 'unspecified';

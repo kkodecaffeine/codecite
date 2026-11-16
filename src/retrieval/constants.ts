@@ -71,3 +71,40 @@ export const DECISION_OWNER_QUERY_PATTERN =
 /** 글·댓글을 쓰거나 올릴 수 있는지 묻는 이용 자격 질문 */
 export const USER_ACTION_ELIGIBILITY_PATTERN =
   /(?:(?:게시판|게시글|게시물|글|댓글|답글).{0,24}(?:작성|쓰|쓸|남기|남길|남겨|올리|올릴|등록)|(?:작성|쓰|쓸|남기|남길|남겨|올리|올릴|등록).{0,24}(?:게시판|게시글|게시물|글|댓글|답글)).{0,20}(?:수\s*(?:있|없)|가능|불가|허용|해도\s*되|안\s*(?:돼|되))/u;
+
+/**
+ * 검색 순서로 받은 근거에서 질문 낱말을 가장 많이 덮는 high claim 근거 한 개를 근거 묶음 앞자리에 둔다
+ * 기능 이름 하나만 겹치는 claim 은 고르지 않도록 덮은 낱말 수와 비율에 하한을 둔다
+ */
+export const ANCHOR_POLICY_EVIDENCE_SLOT_LIMIT = 1;
+export const ANCHOR_POLICY_EVIDENCE_MIN_MATCHED_TERMS = 2;
+export const ANCHOR_POLICY_EVIDENCE_MIN_COVERAGE = 0.5;
+
+/** 질문 말투라 claim 과 겹쳐도 근거가 되지 않는 낱말 */
+export const ANCHOR_QUESTION_FILLER_PATTERN =
+  /^(?:몇|뭐|뭔|무엇|무슨|어떻게|어떤|언제|왜|어디|누가|수|좀|혹시|그럼|그러면|그런데|근데|그래서|그리고|또|또한|그거|그건|이건|가능.*|있.*|없.*|되.*|돼.*|하나요|해요|인가요|알려.*)$/u;
+
+/**
+ * 노출, 한도, 이용 자격을 묻는 질문은 high 정책 근거가 답의 바탕이라 근거 묶음 앞자리를 최대 이 개수만큼 정책 근거에 준다
+ * 기준 근거(anchor) 를 먼저 두고, 검색 순서에서 질문 낱말을 하나라도 덮는 high claim 근거로 채운다
+ */
+export const POLICY_FIRST_EVIDENCE_SLOT_LIMIT = 3;
+export const POLICY_FIRST_EVIDENCE_MIN_MATCHED_TERMS = 1;
+
+/**
+ * 실행 흐름 질문의 앞자리에 둘 절차 행 수. 환불·주문 취소처럼 여러 단계가 이어지는 흐름을 함께 보이려고 기준 근거보다 많이 둔다
+ * 너무 적으면 즉시 처리 행과 그 하위 단계 행이 자리를 다 써서 나중에 도는 배치 행이 빠진다
+ */
+export const PROCEDURE_POLICY_EVIDENCE_SLOT_LIMIT = 6;
+export const PROCEDURE_POLICY_EVIDENCE_MIN_MATCHED_TERMS = 2;
+
+/** 모든 절차 행이 덮는 흐름 낱말. 절차 행을 고를 때 덮은 낱말 수에서 뺀다 */
+export const PROCEDURE_GENERIC_QUESTION_TERM_PATTERN =
+  /^(?:처리.*|순서.*|절차.*|흐름.*|프로세스.*|과정.*|방법.*|단계.*|진행.*|자세.*|정확.*)$/u;
+
+/** 충분성 판정에서 답의 근거로 인정하는 claim 지식 종류. 내부 운영·구현 상세는 뺀다 */
+export const USER_FACING_KNOWLEDGE_KINDS: ReadonlySet<string> = new Set([
+  'product-capability',
+  'user-policy',
+  'partner-operation',
+]);
