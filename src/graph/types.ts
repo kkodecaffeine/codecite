@@ -4,7 +4,10 @@ import type {
   CodeSymbolRelation,
   CrossRepositoryRelation,
   CurrentSymbolRecord,
+  EntityColumn,
+  EntityRelationKind,
   ExecutionFact,
+  FieldWriteKind,
 } from '../extensions/code-knowledge.js';
 import type { Logger } from '../ports.js';
 import type { SnapshotWorkspace } from './snapshot.js';
@@ -419,4 +422,159 @@ export interface CodeGraphBuildResult {
   /** 쓴 파일. 결과 폴더 기준 상대 경로 */
   files: string[];
   durationMs: number;
+}
+
+// ── 탐지 ──
+
+/**
+ * 탐지 결과 공통 필드. 탐지는 심볼의 sites·실행 사실·관계를 보고 `제공 쪽`(라우트, 리졸버, 구독자)과 `부르는 쪽`(호출, 연산, 발행) 사실을 낸다
+ * 연결(저장소 간 그래프)과 토폴로지는 이 결과만 보고 잇는다. 주석·문자열 안의 낱말로는 탐지하지 않는다
+ */
+export interface DetectionBase {
+  repository: string;
+  filePath: string;
+  /** 탐지가 붙은 심볼 이름(`OrderController.cancel`) */
+  symbol: string;
+  line: number;
+  /** 낸 탐지기 이름. 프리셋 이름이거나 설정 규칙이면 `rule:<순번>` */
+  detector: string;
+  /** 0~1. 탐지기마다 정한 값 */
+  confidence: number;
+  /** 사람이 읽는 짧은 근거. 비밀값·절대 경로를 넣지 않는다 */
+  evidence: string;
+}
+
+/** 받는 HTTP 경로. path 는 정규화한 꼴(앞 `/`, 매개변수는 `:param`, 끝 `/` 없음) */
+export interface HttpRouteDetection extends DetectionBase {
+  kind: 'http-route';
+  /** 대문자 메서드. 모든 메서드를 받으면 `*` */
+  method: string;
+  path: string;
+}
+
+/** 부르는 HTTP 호출 */
+export interface HttpCallDetection extends DetectionBase {
+  kind: 'http-call';
+  method: string;
+  /** 정적으로 읽은 경로(정규화). 못 읽었으면 비운다 */
+  path?: string;
+  /** 주소 앞부분이 나온 식별자(`SHOP_API_URL`, `process.env.SHOP_API_URL`, `this.baseUrl`). hints.baseUrls 로 대상 저장소를 좁힌다 */
+  baseIdentifiers: string[];
+  /** 주소에 적힌 호스트. hints.external 과 견준다 */
+  host?: string;
+  /** 경로 일부가 실행 중에 정해져 정적으로 다 읽지 못했는지 */
+  dynamic: boolean;
+}
+
+export type GraphqlOperationType = 'query' | 'mutation' | 'subscription';
+
+/** 받는 GraphQL 루트 필드 */
+export interface GraphqlResolverDetection extends DetectionBase {
+  kind: 'graphql-resolver';
+  operationType: GraphqlOperationType;
+  field: string;
+}
+
+/** 이름 붙은 GraphQL 연산 문서(.graphql 파일이나 gql 태그 글) */
+export interface GraphqlDocumentDetection extends DetectionBase {
+  kind: 'graphql-document';
+  operationType: GraphqlOperationType;
+  operationName: string;
+  rootFields: string[];
+  /** 문서가 속한 스키마 이름. hints.graphqlSchemas 의 키 */
+  schema?: string;
+}
+
+/** 클라이언트 코드가 연산을 부르는 자리(생성된 훅·문서 상수·클라이언트 메서드) */
+export interface GraphqlClientCallDetection extends DetectionBase {
+  kind: 'graphql-client-call';
+  operationName: string;
+  schema?: string;
+}
+
+/** 큐·이벤트 발행과 구독. name 은 정규화 전 원래 이름 */
+export interface MessageDetection extends DetectionBase {
+  kind: 'queue-publish' | 'queue-consume' | 'event-publish' | 'event-handle';
+  name: string;
+  /** 이름을 정적으로 못 읽었는지 */
+  dynamic: boolean;
+}
+
+/** 예약 작업. 이 심볼이 일정에 따라 실행된다 */
+export interface ScheduleDetection extends DetectionBase {
+  kind: 'schedule';
+  /** cron 식, 주기 설명, 또는 정적으로 못 읽으면 `runtime` */
+  expression: string;
+}
+
+/** 엔티티(테이블·컬렉션) 선언 */
+export interface EntityDeclarationDetection extends DetectionBase {
+  kind: 'entity-declaration';
+  table: string;
+  className: string;
+  /** 관계형이 아닌 저장소면 그 종류(`document` 등) */
+  store?: string;
+  columns: EntityColumn[];
+  relations: Array<{
+    /** 상대 엔티티 클래스 이름. 연결 단계가 테이블 이름으로 푼다 */
+    targetClass: string;
+    kind: EntityRelationKind;
+    column?: string;
+    property?: string;
+  }>;
+}
+
+/** 엔티티·캐시를 읽고 쓰는 자리 */
+export interface DataAccessDetection extends DetectionBase {
+  kind: 'entity-read' | 'entity-write' | 'cache-read' | 'cache-write';
+  /** 엔티티 클래스 이름, 테이블 이름, 또는 캐시 키 */
+  target: string;
+  targetType: 'class' | 'table' | 'key';
+}
+
+/** 필드에 값을 쓰는 자리(ORM 갱신 패턴). 대입문은 연결 단계가 실행 사실에서 따로 모은다 */
+export interface FieldWriteDetection extends DetectionBase {
+  kind: 'field-write';
+  entity?: string;
+  field: string;
+  writeKind: FieldWriteKind;
+  valueSummary: string;
+  conditions?: string[];
+}
+
+export type Detection =
+  | HttpRouteDetection
+  | HttpCallDetection
+  | GraphqlResolverDetection
+  | GraphqlDocumentDetection
+  | GraphqlClientCallDetection
+  | MessageDetection
+  | ScheduleDetection
+  | EntityDeclarationDetection
+  | DataAccessDetection
+  | FieldWriteDetection;
+
+export type DetectionKind = Detection['kind'];
+
+/** 탐지기에 넘기는 저장소 문맥 */
+export interface PresetContext {
+  repository: string;
+  config: GraphConfig;
+  logger: Logger;
+  /**
+   * 같은 저장소의 상수 이름(`ORDER_QUEUE`, `Queues.ORDER`)을 문자열 값으로 푼다. 못 풀면 undefined
+   * 상수 심볼의 실행 사실(assigns)에서 만든다
+   */
+  resolveConstant(identifier: string): string | undefined;
+}
+
+/**
+ * 프레임워크 탐지 프리셋. 설정 presets 의 이름으로 켠다
+ * 같은 인터페이스로 자체 프리셋을 만들어 presetModules 에 넣는다. 회사 고유 규칙은 프리셋이 아니라 설정 detectors 로 둔다
+ */
+export interface DetectionPreset {
+  readonly name: string;
+  /** 보는 언어(ExtractedSymbol.language). 비우면 모든 언어 */
+  readonly languages?: readonly string[];
+  detect(symbol: ExtractedSymbol, context: PresetContext): Detection[];
 }
