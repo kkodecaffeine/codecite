@@ -3,9 +3,11 @@
 import type {
   CodeSymbolRelation,
   CrossRepositoryRelation,
+  CurrentSymbolRecord,
   ExecutionFact,
 } from '../extensions/code-knowledge.js';
 import type { Logger } from '../ports.js';
+import type { SnapshotWorkspace } from './snapshot.js';
 
 // ── 설정: codecite.graph.json ──
 
@@ -64,7 +66,11 @@ export interface GraphConfig {
   cwd: string;
   /** 결과 파일 폴더 */
   output: string;
+  /** url 저장소를 받아 두는 캐시 폴더. 저장소마다 `repos/<이름>` 아래에 둔다 */
+  cache: string;
   repositories: GraphRepositoryConfig[];
+  /** 끌 수 있는 기본 제외 glob(테스트·예제·마이그레이션). 바닥 규칙은 여기와 상관없이 늘 뺀다 */
+  defaultExcludes: string[];
   presets: string[];
   hints: GraphHints;
   detectors: GraphDetectorRule[];
@@ -88,8 +94,8 @@ export interface RepositorySnapshot {
   branch: string;
   commitSha: string;
   committedAt: string;
-  /** 꺼낸 파일이 있는 임시 폴더. 결과 파일에는 남기지 않는다 */
-  root: string;
+  /** 꺼낸 파일이 있는 임시 폴더. 결과 파일에는 남기지 않는다. 재사용한 저장소는 꺼내지 않아 비어 있다 */
+  root?: string;
   /** 지난번과 같은 커밋이라 결과를 재사용하는지 */
   reused: boolean;
 }
@@ -182,6 +188,33 @@ export interface ManualLink {
   author?: string;
 }
 
+// ── 설정 읽기 ──
+
+/** 설정 검사 실패를 알린다. 항목 이름과 까닭을 받아 throw 한다 */
+export type GraphConfigFail = (field: string, detail: string) => never;
+
+export interface LoadGraphConfigOptions {
+  /** 설정 파일 경로. 비우면 `<cwd>/codecite.graph.json`. 설정 안의 상대 경로는 이 파일이 있는 폴더 기준이다 */
+  file?: string;
+}
+
+// ── 스냅샷 과정 ──
+
+/** 원격 기본 브랜치에서 읽을 커밋. 꺼내기 전에 정해 지난 결과와 비교한다 */
+export interface RepositoryHead {
+  branch: string;
+  commitSha: string;
+}
+
+/** git 한 번 부르기 */
+export interface GitRunOptions {
+  cwd?: string;
+  /** 오류 메시지 앞에 붙일 저장소 이름 */
+  repository?: string;
+  /** 비우면 기다림에 상한이 없다 */
+  timeoutMs?: number;
+}
+
 // ── 파일 고르기 ──
 
 /** 저장소 하나에 거는 파일 고르기 규칙 */
@@ -216,4 +249,133 @@ export interface FileSelection {
   /** 고른 파일. 저장소 기준 상대 경로, 정렬돼 있다 */
   selected: string[];
   skipped: FileSkipCounts;
+}
+
+// ── 레코드 ──
+
+/** 레코드를 만들 때 저장소마다 같은 값 */
+export interface RecordContext {
+  repository: string;
+  commitSha: string;
+  committedAt: string;
+  /** 설정 groups. 파일이 받치는 정책 묶음을 정한다 */
+  groups: Record<string, string[]>;
+}
+
+/** 정책 묶음 규칙 하나. 설정 groups 의 `저장소:경로 glob` 을 푼 것이다 */
+export interface GraphGroupRule {
+  group: string;
+  repository: string;
+  glob: string;
+  /** glob 에서 와일드카드를 뺀 글자 수. 클수록 좁은 규칙이다 */
+  specificity: number;
+  /** 설정에 적은 순서 */
+  order: number;
+}
+
+// ── 결과 파일 ──
+
+/** manifest.json 의 저장소 한 줄. 경로는 결과 폴더 기준 상대 경로만 쓴다 */
+export interface GraphManifestRepository {
+  name: string;
+  branch: string;
+  commitSha: string;
+  committedAt: string;
+  /** 이 저장소 결과를 만든 입력(설정 일부·도구 판·추출기)의 지문. 커밋과 함께 같으면 다음 번에 재사용한다 */
+  inputFingerprint: string;
+  /** `symbols/<이름>.jsonl` */
+  symbolsFile: string;
+  symbolCount: number;
+  /** 추출기에 넘긴 파일 수 */
+  fileCount: number;
+  skippedFiles: FileSkipCounts;
+  /** 추출기가 건너뛴 파일과 까닭. 메시지의 로컬 경로와 비밀값 모양은 지운다 */
+  failures: ExtractionFailure[];
+}
+
+/** 결과 폴더의 manifest.json. 같은 커밋·같은 설정이면 바이트 단위로 같다 */
+export interface GraphManifest {
+  schemaVersion: 1;
+  /** 저장소 커밋 시각 가운데 가장 늦은 것. 만든 시각을 넣지 않아야 같은 입력에 같은 출력이 나온다 */
+  generatedAt: string;
+  tool: { name: string; version: string };
+  /** 설정 지문. 로컬 경로와 주소의 계정 정보는 빼고 만든다 */
+  configFingerprint: string;
+  /** 이름 순서 */
+  repositories: GraphManifestRepository[];
+}
+
+/** 한 번에 쓰는 결과 파일 묶음 */
+export interface GraphOutputs {
+  manifest: GraphManifest;
+  /** 저장소 이름 → 레코드 */
+  symbols: ReadonlyMap<string, readonly CurrentSymbolRecord[]>;
+  /** 결과 폴더 안 파일 이름 → JSON 값 */
+  artifacts: ReadonlyMap<string, unknown>;
+}
+
+// ── 파이프라인 ──
+
+export interface BuildCodeGraphOptions {
+  logger?: Logger;
+  /** 확장자로 골라 부르는 추출기. 설정의 extractorModules 에서 읽은 추출기 앞에 둔다 */
+  extractors?: readonly SymbolExtractor[];
+  /** 걸린 시간을 재는 시계. 결과 파일에는 쓰지 않는다 */
+  now?: () => Date;
+  /** 심볼 수가 절반 아래로 줄어도 멈추지 않을 저장소 이름. 줄어든 까닭을 확인한 뒤에만 쓴다 */
+  acceptSymbolDrop?: readonly string[];
+}
+
+/** 저장소 하나를 만들 때 파이프라인이 넘기는 것 */
+export interface RepositoryBuildContext {
+  config: GraphConfig;
+  extractors: readonly SymbolExtractor[];
+  /** 확장자(소문자) → 추출기 */
+  routes: ReadonlyMap<string, SymbolExtractor>;
+  toolVersion: string;
+  /** 지난 manifest 의 이 저장소 줄 */
+  previous: GraphManifestRepository | undefined;
+  workspace: SnapshotWorkspace;
+  /** 실패 메시지에서 지울 이 컴퓨터의 경로 */
+  localRoots: readonly string[];
+  logger: Logger;
+  acceptSymbolDrop: readonly string[];
+}
+
+/** 저장소 하나의 만들기 결과 */
+export interface RepositoryBuild {
+  snapshot: RepositorySnapshot;
+  manifest: GraphManifestRepository;
+  /** 파일 경로·시작 줄·심볼 이름 순서 */
+  records: CurrentSymbolRecord[];
+  /**
+   * 추출기가 돌려준 심볼 그대로(탐지 단계가 쓰는 중간 데이터 포함). 메모리에만 두고 결과 파일에는 쓰지 않는다
+   * 재사용한 저장소는 다시 추출하지 않으므로 비어 있다
+   */
+  extracted?: ExtractedSymbol[];
+}
+
+/**
+ * 파이프라인 단계가 주고받는 상태. 탐지·연결 단계는 records 를 읽고 결과를 artifacts 에 넣는다
+ * artifacts 의 키는 결과 폴더 안 파일 이름(`topology.json`)이고, 값은 JSON 으로 쓴다
+ */
+export interface GraphBuildState {
+  config: GraphConfig;
+  /** 저장소 이름 순서 */
+  repositories: RepositoryBuild[];
+  /** 모든 저장소의 레코드. 저장소 이름 순서 */
+  records: CurrentSymbolRecord[];
+  artifacts: Map<string, unknown>;
+}
+
+export interface CodeGraphBuildResult {
+  /** 결과 폴더(절대 경로). 결과 파일 안에는 쓰지 않는다 */
+  output: string;
+  manifest: GraphManifest;
+  /** 저장소마다 지난 결과를 재사용했는지 */
+  reused: Record<string, boolean>;
+  records: CurrentSymbolRecord[];
+  /** 쓴 파일. 결과 폴더 기준 상대 경로 */
+  files: string[];
+  durationMs: number;
 }

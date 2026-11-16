@@ -17,6 +17,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./graph": {
+      "types": "./dist/graph/index.d.ts",
+      "import": "./dist/graph/index.js"
     }
   },
   "files": [
@@ -33,6 +37,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "eval": "node dist/cli.js eval --cwd examples/dotori-market"
+  },
+  "peerDependencies": {
+    "typescript": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "typescript": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",

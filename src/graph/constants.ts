@@ -1,4 +1,72 @@
-import type { FileSkipCounts } from './types.js';
+import type { ExecutionFactKind } from '../extensions/code-knowledge.js';
+import type { Logger } from '../ports.js';
+import type { FileSkipCounts, GraphDetectorKind } from './types.js';
+
+// ── 설정 ──
+
+/** 그래프 설정 파일 이름. 설정 안의 상대 경로는 이 파일이 있는 폴더 기준이다 */
+export const GRAPH_CONFIG_FILE = 'codecite.graph.json';
+/** 결과 폴더 기본값 */
+export const GRAPH_DEFAULT_OUTPUT = '.codecite/graph';
+/** 캐시 폴더를 주지 않으면 결과 폴더 옆의 이 이름 폴더를 쓴다 */
+export const GRAPH_DEFAULT_CACHE_NAME = 'cache';
+/** 관계 선언이 없을 때 연결 컬럼으로 볼 이름 끝말 기본값 */
+export const GRAPH_DEFAULT_FOREIGN_KEY_SUFFIXES: readonly string[] = [
+  'Id',
+  '_id',
+];
+
+/** 설정 파일에서 받는 항목. 오타로 생긴 모르는 항목이 조용히 무시되지 않게 이 밖의 항목은 거절한다 */
+export const GRAPH_CONFIG_KEYS: readonly string[] = [
+  'output',
+  'cache',
+  'repositories',
+  'defaultExcludes',
+  'presets',
+  'hints',
+  'detectors',
+  'entities',
+  'groups',
+  'manualLinks',
+  'extractorModules',
+  'presetModules',
+  'maxUnresolvedRatio',
+];
+export const GRAPH_REPOSITORY_KEYS: readonly string[] = [
+  'name',
+  'url',
+  'path',
+  'defaultBranch',
+  'include',
+  'exclude',
+];
+export const GRAPH_HINT_KEYS: readonly string[] = [
+  'baseUrls',
+  'proxyPrefixes',
+  'packages',
+  'graphqlSchemas',
+  'external',
+];
+export const GRAPH_DETECTOR_KEYS: readonly string[] = [
+  'kind',
+  'call',
+  'decorator',
+  'nameArgument',
+];
+export const GRAPH_DETECTOR_KINDS: readonly GraphDetectorKind[] = [
+  'http-client',
+  'queue-publisher',
+  'queue-consumer',
+  'event-publisher',
+  'event-handler',
+  'scheduler',
+];
+
+/** 저장소 이름. 결과 파일 이름(`symbols/<이름>.jsonl`)으로도 쓰므로 경로 구분자와 앞 점을 막는다 */
+export const GRAPH_REPOSITORY_NAME_PATTERN =
+  /^[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/;
+/** 브랜치 이름에 쓸 수 있는 글자. 옵션처럼 보이는 이름과 상위 경로는 따로 막는다 */
+export const GRAPH_BRANCH_NAME_PATTERN = /^[A-Za-z0-9._/-]+$/;
 
 // ── 파일 고르기 ──
 
@@ -142,3 +210,109 @@ export const KNOWN_TOKEN_PATTERNS: readonly RegExp[] = [
   /(?<![A-Za-z0-9_-])npm_[A-Za-z0-9]{36}(?![A-Za-z0-9])/g,
   /(?<![A-Za-z0-9_-])eyJ[A-Za-z0-9_-]{8,}\.eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}/g,
 ];
+
+// ── 레코드와 결과 파일 ──
+
+export const GRAPH_SCHEMA_VERSION = 1;
+/** 결과 파일 형식 판. 바꾸면 지난 결과를 재사용하지 않는다 */
+export const GRAPH_OUTPUT_FORMAT = 1;
+export const GRAPH_TOOL_NAME = 'codecite';
+export const GRAPH_MANIFEST_FILE = 'manifest.json';
+export const GRAPH_SYMBOLS_FOLDER = 'symbols';
+export const GRAPH_SYMBOLS_EXTENSION = '.jsonl';
+/** 단계가 더하는 결과 파일 이름. 결과 폴더 바로 아래 JSON 파일만 쓴다 */
+export const GRAPH_ARTIFACT_NAME_PATTERN = /^[a-z0-9][a-z0-9-]*\.json$/;
+
+/** 현재 심볼 레코드가 가질 수 있는 키. 계약(CurrentSymbolRecord)에 없는 키는 받지 않는다 */
+export const RECORD_KEYS: ReadonlySet<string> = new Set([
+  'schemaVersion',
+  'recordType',
+  'repository',
+  'filePath',
+  'language',
+  'symbol',
+  'stableSymbolId',
+  'kind',
+  'commitSha',
+  'committedAt',
+  'contentHash',
+  'content',
+  'lineStart',
+  'lineEnd',
+  'description',
+  'relations',
+  'triggeredBy',
+  'policyGroup',
+  'executionFacts',
+]);
+export const EXECUTION_FACT_KINDS: readonly ExecutionFactKind[] = [
+  'condition',
+  'assigns',
+  'calls',
+  'returns',
+  'throws',
+];
+
+/** 레코드 어디에도 두지 않는 키. 변경 원문과 비밀값을 담는 이름이다(소문자, 밑줄 뺌) */
+export const FORBIDDEN_RECORD_KEYS: readonly string[] = [
+  'rawpatch',
+  'patch',
+  'diff',
+  'secretvalue',
+  'tokenvalue',
+  'credentialvalue',
+  'passwordvalue',
+];
+
+/** 심볼 수가 지난번의 이 비율 아래로 줄면 그 저장소에서 멈춘다 */
+export const GRAPH_SYMBOL_COLLAPSE_RATIO = 0.5;
+/** 실패 메시지를 남길 때 자르는 길이 */
+export const GRAPH_FAILURE_MESSAGE_MAX_CHARS = 500;
+
+// ── git ──
+
+export const GIT_MAX_BUFFER_BYTES = 512 * 1024 * 1024;
+/** 원격에 묻는 명령(ls-remote)을 기다리는 시간. 받기·꺼내기는 저장소 크기에 따라 길어 상한을 두지 않는다 */
+export const GIT_REMOTE_QUERY_TIMEOUT_MS = 120_000;
+/** git 오류를 보여 줄 때 자르는 길이 */
+export const GIT_ERROR_SUMMARY_MAX_CHARS = 300;
+/** 꺼낸 폴더에서 훅·파일 감시를 끈다. 사용자 전역 설정의 훅이 임시 폴더에서 돌지 않게 한다 */
+export const GIT_CHECKOUT_SETTINGS: readonly string[] = [
+  '-c',
+  'core.hooksPath=/dev/null',
+  '-c',
+  'core.fsmonitor=false',
+];
+/**
+ * git 에 넘기는 고정 환경 변수
+ * 대화형 질문을 끄고(멈추지 않게), 읽기 명령이 색인을 고쳐 쓰지 않게 하고, 대용량 파일은 내려받지 않고, 메시지를 영어로 받는다
+ */
+export const GIT_FIXED_VARIABLES: Readonly<Record<string, string>> = {
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_OPTIONAL_LOCKS: '0',
+  GIT_LFS_SKIP_SMUDGE: '1',
+  LC_ALL: 'C',
+};
+/** 물려받지 않는 환경 변수. git 훅 안에서 부르면 이 값이 다른 저장소를 가리킨다 */
+export const GIT_DROPPED_VARIABLES: readonly string[] = [
+  'GIT_DIR',
+  'GIT_WORK_TREE',
+  'GIT_INDEX_FILE',
+  'GIT_OBJECT_DIRECTORY',
+  'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+  'GIT_COMMON_DIR',
+  'GIT_NAMESPACE',
+  'GIT_PREFIX',
+];
+/** 임시 작업 폴더 이름 앞머리 */
+export const GRAPH_WORKSPACE_PREFIX = 'codecite-graph-';
+/** url 저장소 캐시 안에서 저장소를 두는 폴더 */
+export const GRAPH_CACHE_REPOSITORIES_FOLDER = 'repos';
+
+/** 로거를 주지 않았을 때 쓰는 조용한 로거 */
+export const SILENT_LOGGER: Logger = {
+  debug: () => undefined,
+  info: () => undefined,
+  warn: () => undefined,
+  error: () => undefined,
+};
