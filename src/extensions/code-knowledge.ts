@@ -68,7 +68,7 @@ export interface CodeSymbolRecordBase {
   filePath: string;
   language: string;
   symbol: string;
-  /** 이름이 바뀌거나 파일을 옮겨도 같은 심볼을 가리키도록 만든 id */
+  /** 저장소·파일 경로·심볼 이름의 해시. 파일을 옮기거나 이름을 바꾸면 바뀐다. 옮김을 잇는 일은 변경 이벤트의 lineage 가 맡는다 */
   stableSymbolId: string;
   /** 함수, 메서드, 클래스, 상수 같은 심볼 종류 */
   kind: string;
@@ -90,8 +90,8 @@ export interface CodeSymbolRecordBase {
 /** 지금 기본 브랜치에 있는 심볼 하나 */
 export interface CurrentSymbolRecord extends CodeSymbolRecordBase {
   recordType: 'current_symbol';
-  /** 이 심볼이 주로 받치는 정책 묶음. claim CSV 의 policy_group 과 같은 값을 쓴다 */
-  policyGroup: string;
+  /** 이 심볼이 주로 받치는 정책 묶음. claim CSV 의 policy_group 과 같은 값을 쓴다. 묶음 설정이 없으면 비어 있다 */
+  policyGroup?: string;
   /** 본문에서 뽑은 실행 사실. 뽑지 못하는 언어나 선언만 있는 심볼이면 비어 있다 */
   executionFacts?: ExecutionFact[];
 }
@@ -242,7 +242,9 @@ export type CrossRepositoryExtractionKind =
   | 'entity'
   | 'cache-key'
   | 'package'
-  | 'symbol-name';
+  | 'symbol-name'
+  /** 사람이나 에이전트가 근거와 함께 적은 연결 */
+  | 'manual';
 
 /** 저장소 간 그래프의 노드. 여러 저장소에 걸친 같은 대상(경로, 큐, 테이블)을 하나로 묶는다 */
 export interface CrossRepositoryNode {
@@ -366,6 +368,8 @@ export interface FieldWriterEntry {
   filePath: string;
   lineStart: number;
   kind: FieldWriteKind;
+  /** 값을 받는 필드가 속한 엔티티. ORM 갱신처럼 대상을 알 때만 단다. 필드 이름만 같은 다른 엔티티와 섞지 않으려고 둔다 */
+  entity?: string;
   /** 넣는 값을 줄여 쓴 글. 문자열 리터럴 내용은 가린다 */
   valueSummary: string;
   conditions?: string[];
