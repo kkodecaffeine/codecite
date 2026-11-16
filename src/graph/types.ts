@@ -563,9 +563,15 @@ export interface PresetContext {
   logger: Logger;
   /**
    * 같은 저장소의 상수 이름(`ORDER_QUEUE`, `Queues.ORDER`)을 문자열 값으로 푼다. 못 풀면 undefined
-   * 상수 심볼의 실행 사실(assigns)에서 만든다
+   * 실행 사실은 문자열을 가리므로 상수 심볼의 원문에서 푼다
    */
   resolveConstant(identifier: string): string | undefined;
+  /**
+   * 같은 저장소에서 꺼낸 심볼 전부(파일 경로·시작 줄 순서). 다른 심볼을 봐야 하는 탐지에 쓴다
+   * 예: 메서드 경로에 클래스의 기본 경로 붙이기, 같은 파일의 처리 함수 찾기, `axios.create` 로 만든 인스턴스 알아보기
+   * 같은 배열이 저장소마다 한 번 넘어오므로 탐지기는 이 배열을 열쇠로 색인을 한 번만 만들어 쓴다
+   */
+  symbols?: readonly ExtractedSymbol[];
 }
 
 /**
