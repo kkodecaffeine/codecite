@@ -1,6 +1,7 @@
 import type { PolicyClaimFacet } from '../domain/types.js';
 import { POLICY_GROUP_SUMMARY_CLAIM_ID_PREFIX } from '../retrieval/constants.js';
 import { preferredPolicyClaimFacets } from '../retrieval/query-intent.js';
+import { sanitizePublicPolicyAnswer } from '../safety/public-answer-sanitizer.js';
 import { inferPolicyFacet } from '../text/facet-inference.js';
 import {
   completedAnswerItems,
@@ -39,7 +40,7 @@ export function deterministicPolicyFallback(
     .slice(0, policyAnswerItemLimit(mode));
   const answer =
     statements.length > 0 ? statements.join('\n') : UNANSWERED_EVIDENCE_ANSWER;
-  return enforcePolicyAnswerContract(answer, mode);
+  return enforcePolicyAnswerContract(sanitizePublicPolicyAnswer(answer), mode);
 }
 
 /**

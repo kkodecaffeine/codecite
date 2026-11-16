@@ -343,7 +343,7 @@ function highConfidenceSubjectTokens(
 }
 
 /** 세 글자 이상 한글 낱말은 앞 두 글자 어간으로 비교해 `가입한` 과 `가입하면` 을 같은 낱말로 본다 */
-function termMatches(term: string, token: string): boolean {
+export function termMatches(term: string, token: string): boolean {
   if (term === token) {
     return true;
   }

@@ -179,4 +179,24 @@ describe('deterministicPolicyFallback', () => {
 
     expect(answer.split('\n')).toHaveLength(6);
   });
+
+  it('결정적 답변도 공개 정보 정제를 거친다', () => {
+    const answer = deterministicPolicyFallback({
+      question: '포장 규칙',
+      evidence: [
+        evidence('packing', '', {
+          policyClaims: [
+            claim(
+              'packing',
+              '상자 포장 규칙은 `wrapPolicyTable`이 정하고 rules/packing.yml 에 적혀 있다.',
+            ),
+          ],
+        }),
+      ],
+    });
+
+    expect(answer).toBe(
+      '상자 포장 규칙은 내부 항목이 정하고 [비공개 경로] 에 적혀 있다.',
+    );
+  });
 });

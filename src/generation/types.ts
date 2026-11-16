@@ -74,3 +74,37 @@ export interface DeterministicFallbackInput {
   evidence: readonly PolicyEvidence[];
   answerMode?: PolicyAnswerMode;
 }
+
+/** 답변 계약이 근거의 필수 상세와 숫자 조건을 되살릴 때의 입력 */
+export interface RequiredEvidenceDetailsInput {
+  question?: string;
+  answer: string;
+  evidence: readonly PolicyEvidence[];
+}
+
+/** 답변 검사가 모델 답을 결정적 답변으로 바꾼 까닭 */
+export type AnswerGuardReason =
+  | 'no_evidence'
+  | 'empty'
+  | 'evasive'
+  | 'implementation_only'
+  | 'invented_figure'
+  | 'invented_condition';
+
+/** 답변 검사 입력. evidence 는 모델에 넘긴 묶인 근거다 */
+export interface AnswerGuardInput {
+  question: string;
+  answer: string;
+  evidence: readonly PolicyEvidence[];
+  /** 결정적 답변으로 바꿀 때 쓸 답변 길이 모드 */
+  answerMode?: PolicyAnswerMode;
+  /** 근거나 질문에 없으면 지어낸 것으로 보는 조건 낱말. 없으면 기본 목록을 쓴다 */
+  inventedConditionTerms?: readonly string[];
+}
+
+/** 답변 검사 결과. replaced 면 answer 는 결정적 답변이고 reason 에 까닭이 있다 */
+export interface AnswerGuardResult {
+  answer: string;
+  replaced: boolean;
+  reason?: AnswerGuardReason;
+}
