@@ -3,6 +3,7 @@
 import type TypeScript from 'typescript';
 import type { ExecutionFact } from '../../extensions/code-knowledge.js';
 import type {
+  ClassMember,
   CodeSite,
   ExtractContext,
   ExtractedSymbol,
@@ -27,6 +28,7 @@ import { createTypeScriptFactProjector } from './facts-typescript.js';
 import {
   boundDeclarationContent,
   collapseText,
+  compareText,
   errorMessage,
   finalizeExtraction,
   finalizeRelations,
@@ -545,6 +547,7 @@ class FileSymbolReader {
         .find((value) => value !== undefined) ?? 'class';
     this.addSymbol(node, name, kind, {
       sites: this.siteReader.decoratorSites(this.sourceFile, node),
+      members: this.classMembers(node),
       relations: [
         ...this.importRelations(node),
         ...this.heritageRelations(node),
@@ -633,6 +636,7 @@ class FileSymbolReader {
       relations: RawRelation[];
       facts?: ExecutionFact[];
       sites?: CodeSite[];
+      members?: ClassMember[];
       documented?: TypeScript.Node;
       undocumented?: boolean;
       span?: { end: TypeScript.Node; content: string };
@@ -650,6 +654,7 @@ class FileSymbolReader {
       : this.documentation(details.documented ?? node);
     const executable = kind === 'function' || kind === 'method';
     const sites = finalizeSites(details.sites ?? []);
+    const members = details.members ?? [];
     this.symbols.push({
       filePath: this.file.filePath,
       language: this.language,
@@ -668,7 +673,65 @@ class FileSymbolReader {
         ? { executionFacts: details.facts ?? [] }
         : {}),
       ...(sites.length > 0 ? { sites } : {}),
+      ...(members.length > 0 ? { members } : {}),
     });
+  }
+
+  /**
+   * 클래스의 필드(초기값·데코레이터와 상관없이)와 생성자 매개변수 속성(접근 제한자·readonly 가 붙은 것),
+   * 데코레이터가 붙은 생성자 매개변수. 메서드·접근자는 멤버가 아니라 심볼이다. 줄 번호, 이름 순으로 놓는다
+   */
+  private classMembers(node: TypeScript.ClassDeclaration): ClassMember[] {
+    const ts = this.ts;
+    const members: ClassMember[] = [];
+    for (const member of node.members) {
+      if (ts.isPropertyDeclaration(member)) {
+        members.push(this.classMember(member, false));
+      }
+    }
+    const constructors = node.members.filter(ts.isConstructorDeclaration);
+    const constructor =
+      constructors.find((member) => member.body !== undefined) ??
+      constructors[0];
+    for (const parameter of constructor?.parameters ?? []) {
+      const property = ts.isParameterPropertyDeclaration(
+        parameter,
+        constructor,
+      );
+      const decorated = (ts.getDecorators(parameter) ?? []).length > 0;
+      if ((property || decorated) && ts.isIdentifier(parameter.name)) {
+        members.push(this.classMember(parameter, true));
+      }
+    }
+    return members.sort(
+      (left, right) =>
+        left.line - right.line || compareText(left.name, right.name),
+    );
+  }
+
+  private classMember(
+    node: TypeScript.PropertyDeclaration | TypeScript.ParameterDeclaration,
+    parameter: boolean,
+  ): ClassMember {
+    const sourceFile = this.sourceFile;
+    return {
+      name: node.name.getText(sourceFile),
+      ...(node.type
+        ? {
+            type: collapseText(
+              node.type.getText(sourceFile),
+              MAX_RELATION_TARGET_LENGTH,
+            ),
+          }
+        : {}),
+      line:
+        sourceFile.getLineAndCharacterOfPosition(node.name.getStart(sourceFile))
+          .line + 1,
+      ...(parameter ? { parameter: true } : {}),
+      decorators: finalizeSites(
+        this.siteReader.decoratorSites(sourceFile, node),
+      ),
+    };
   }
 
   private documentation(node: TypeScript.Node): string | undefined {

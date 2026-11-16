@@ -143,11 +143,22 @@ describe('toCurrentSymbolRecord', () => {
           args: [{ text: '<literal>', literal: 'refund' }],
         },
       ],
+      members: [
+        {
+          name: 'ledger',
+          type: 'AcornLedger',
+          line: 2,
+          parameter: true,
+          decorators: [],
+        },
+      ],
       parserState: { depth: 2 },
     } as ExtractedSymbol;
     const record = toCurrentSymbolRecord(withSites, context);
     expect(record).not.toHaveProperty('sites');
+    expect(record).not.toHaveProperty('members');
     expect(record).not.toHaveProperty('parserState');
+    expect(JSON.stringify(record)).not.toContain('AcornLedger');
     expect(JSON.stringify(record)).not.toContain('acornQueue');
   });
 

@@ -677,3 +677,173 @@ export * from './refund.errors';
     ]);
   });
 });
+
+describe('typescriptExtractor 클래스 멤버', () => {
+  it('엔티티 필드는 데코레이터와 함께, 데코레이터 없는 필드도 멤버로 남긴다', async () => {
+    // 저장소의 비밀값 검사에 걸리지 않도록 조각을 실행 중에 잇는다
+    const fakeLiveKey = ['sk', 'live', 'Dotori1Acorn2Market3Shop4'].join('_');
+    const { symbols } = await typescriptExtractor().extract(
+      [
+        file(
+          'src/order/order.entity.ts',
+          `@Entity('orders')
+export class Order {
+  @Column({ enum: OrderStatus })
+  status: OrderStatus;
+
+  @ManyToOne(() => Member)
+  @JoinColumn({ name: 'member_id' })
+  member: Member;
+
+  memo?: string;
+
+  @Column({ default: '${fakeLiveKey}' })
+  couponCode: string;
+
+  cancel() {
+    this.status = OrderStatus.Cancelled;
+  }
+}
+`,
+        ),
+      ],
+      context,
+    );
+
+    const order = bySymbol(symbols, 'Order');
+    expect(order.kind).toBe('entity');
+    expect(order.members).toEqual([
+      {
+        name: 'status',
+        type: 'OrderStatus',
+        line: 4,
+        decorators: [
+          {
+            kind: 'decorator',
+            name: 'Column',
+            line: 3,
+            args: [
+              {
+                text: '{ enum: OrderStatus }',
+                properties: {
+                  enum: { text: 'OrderStatus', identifier: 'OrderStatus' },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      {
+        name: 'member',
+        type: 'Member',
+        line: 8,
+        decorators: [
+          {
+            kind: 'decorator',
+            name: 'ManyToOne',
+            line: 6,
+            args: [{ text: '() => Member' }],
+          },
+          {
+            kind: 'decorator',
+            name: 'JoinColumn',
+            line: 7,
+            args: [
+              {
+                text: '{ name: <literal> }',
+                properties: {
+                  name: { text: '<literal>', literal: 'member_id' },
+                },
+              },
+            ],
+          },
+        ],
+      },
+      { name: 'memo', type: 'string', line: 10, decorators: [] },
+      {
+        name: 'couponCode',
+        type: 'string',
+        line: 13,
+        decorators: [
+          {
+            kind: 'decorator',
+            name: 'Column',
+            line: 12,
+            args: [
+              {
+                text: '{ default: <literal> }',
+                properties: {
+                  default: { text: '<literal>', literal: '<redacted>' },
+                },
+              },
+            ],
+          },
+        ],
+      },
+    ]);
+    expect(JSON.stringify(order.members)).not.toContain(fakeLiveKey);
+    expect(bySymbol(symbols, 'Order.cancel').members).toBeUndefined();
+  });
+
+  it('생성자 매개변수 속성과 데코레이터가 붙은 매개변수를 parameter 멤버로 남긴다', async () => {
+    const { symbols } = await typescriptExtractor().extract(
+      [
+        file(
+          'src/refund/refund.service.ts',
+          `@Injectable()
+export class RefundService {
+  private readonly retryLimit = 3;
+
+  constructor(
+    @InjectRepository(Order) private readonly orders: Repository<Order>,
+    @InjectQueue('refunds') private readonly refundQueue: Queue,
+    private readonly events: EventEmitter2,
+    clock: Clock,
+  ) {}
+}
+`,
+        ),
+      ],
+      context,
+    );
+
+    expect(bySymbol(symbols, 'RefundService').members).toEqual([
+      { name: 'retryLimit', line: 3, decorators: [] },
+      {
+        name: 'orders',
+        type: 'Repository<Order>',
+        line: 6,
+        parameter: true,
+        decorators: [
+          {
+            kind: 'decorator',
+            name: 'InjectRepository',
+            line: 6,
+            args: [{ text: 'Order', identifier: 'Order' }],
+          },
+        ],
+      },
+      {
+        name: 'refundQueue',
+        type: 'Queue',
+        line: 7,
+        parameter: true,
+        decorators: [
+          {
+            kind: 'decorator',
+            name: 'InjectQueue',
+            line: 7,
+            args: [{ text: '<literal>', literal: 'refunds' }],
+          },
+        ],
+      },
+      {
+        name: 'events',
+        type: 'EventEmitter2',
+        line: 8,
+        parameter: true,
+        decorators: [],
+      },
+    ]);
+  });
+});
