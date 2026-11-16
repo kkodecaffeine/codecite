@@ -20,13 +20,16 @@ import {
   it,
   vi,
 } from 'vitest';
+import type { SystemTopologyGraph } from '../extensions/code-knowledge.js';
 import { parseGraphConfig } from './config.js';
+import { typescriptExtractor } from './extractors/typescript.js';
 import { GraphCollapseError } from './output.js';
 import { buildCodeGraph } from './pipeline.js';
 import type {
   DetectionPreset,
   ExtractedSymbol,
   GraphConfig,
+  HttpRouteDetection,
   MessageDetection,
   SourceFile,
   SymbolExtractor,
@@ -255,6 +258,7 @@ describe('buildCodeGraph', { timeout: 60_000 }, () => {
       'manifest.json',
       'symbols/shop-api.jsonl',
       'symbols/shop-web.jsonl',
+      'topology.json',
     ]);
     expect(result.records).toEqual([]);
     const tree = await readTree(config.output);
@@ -615,5 +619,148 @@ describe('buildCodeGraph 탐지 단계', { timeout: 60_000 }, () => {
     ).rejects.toThrow(
       'unknown preset "acorn-mail" in presets. Known presets: acorn-queue',
     );
+  });
+});
+
+describe('buildCodeGraph 저장소 안 토폴로지', { timeout: 60_000 }, () => {
+  /** 메서드의 `@Post('경로')` 데코레이터를 라우트로 본다 */
+  const routePreset: DetectionPreset = {
+    name: 'acorn-http',
+    languages: ['typescript'],
+    detect(symbol, context) {
+      return (symbol.sites ?? [])
+        .filter((site) => site.kind === 'decorator' && site.name === 'Post')
+        .map((site): HttpRouteDetection => ({
+          kind: 'http-route',
+          repository: context.repository,
+          filePath: symbol.filePath,
+          symbol: symbol.symbol,
+          line: site.line,
+          detector: 'acorn-http',
+          confidence: 0.95,
+          evidence: `@Post on ${symbol.symbol}`,
+          method: 'POST',
+          path: `/${site.args[0]?.literal ?? ''}`,
+        }));
+    },
+  };
+  /** `publish(큐, …)` 호출을 큐 발행으로 보고, 큐 이름은 상수로 푼다 */
+  const queuePreset: DetectionPreset = {
+    name: 'acorn-queue',
+    languages: ['typescript'],
+    detect(symbol, context) {
+      return (symbol.sites ?? [])
+        .filter((site) => site.kind === 'call' && site.name === 'publish')
+        .map((site): MessageDetection => {
+          const argument = site.args[0];
+          const name = argument?.identifier
+            ? context.resolveConstant(argument.identifier)
+            : argument?.literal;
+          return {
+            kind: 'queue-publish',
+            repository: context.repository,
+            filePath: symbol.filePath,
+            symbol: symbol.symbol,
+            line: site.line,
+            detector: 'acorn-queue',
+            confidence: name ? 0.9 : 0.4,
+            evidence: `publish(${argument?.text ?? ''})`,
+            name: name ?? argument?.text ?? '',
+            dynamic: name === undefined,
+          };
+        });
+    },
+  };
+
+  it('실제 추출 결과와 프리셋으로 토폴로지를 그리고, 다시 돌리면 재사용해도 바이트 단위로 같으며 절대 경로가 없다', async () => {
+    const shop = await createRemote(root, 'acorn-shop', 'main', {
+      'src/queues.ts':
+        "export const Queues = { REFUND: 'refund-requested' } as const;\n",
+      'src/refund/refund.service.ts': [
+        "import { Queues } from '../queues';",
+        'export class RefundService {',
+        '  approve(id: string) {',
+        '    publish(Queues.REFUND, id);',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/refund/refund.controller.ts': [
+        "import { RefundService } from './refund.service';",
+        'export class RefundController {',
+        '  constructor(private readonly refunds: RefundService) {}',
+        "  @Post('refunds/:id')",
+        '  approve(id: string) {',
+        '    return this.refunds.approve(id);',
+        '  }',
+        '}',
+        '',
+      ].join('\n'),
+      'src/server.ts': 'export function start() {}\n',
+      'src/main.ts': "import { start } from './server';\nstart();\n",
+    });
+    const config = parseGraphConfig(
+      {
+        repositories: [{ name: 'shop-api', url: shop.bare }],
+        presets: ['acorn-http', 'acorn-queue'],
+      },
+      join(root, 'graph'),
+    );
+    const options = {
+      extractors: [typescriptExtractor()],
+      presets: [routePreset, queuePreset],
+    };
+    const first = await buildCodeGraph(config, options);
+    expect(first.files).toContain('topology.json');
+    const tree = await readTree(config.output);
+    const topology = JSON.parse(tree['topology.json']) as SystemTopologyGraph;
+    const edges = topology.edges.map(
+      (edge) => `${edge.type} ${edge.from} -> ${edge.to}`,
+    );
+    const symbolId = (filePath: string, name: string) =>
+      `symbol:shop-api:${filePath}#${name}`;
+    const controller = 'src/refund/refund.controller.ts';
+    const service = 'src/refund/refund.service.ts';
+
+    expect(edges).toContain(
+      `TRIGGERS api:shop-api:POST /refunds/:id -> ${symbolId(controller, 'RefundController.approve')}`,
+    );
+    expect(edges).toContain(
+      `CALLS ${symbolId(controller, 'RefundController.approve')} -> ${symbolId(service, 'RefundService.approve')}`,
+    );
+    expect(edges).toContain(
+      `PUBLISHES ${symbolId(service, 'RefundService.approve')} -> queue:shop-api:refund-requested`,
+    );
+    expect(edges).toContain(
+      `CALLS file:shop-api:src/main.ts -> ${symbolId('src/server.ts', 'start')}`,
+    );
+    expect(topology.generatedAt).toBe('2026-11-01T09:00:00.000Z');
+    expect(topology.sources).toEqual([
+      { kind: 'extractor:typescript' },
+      { kind: 'preset:acorn-http' },
+      { kind: 'preset:acorn-queue' },
+    ]);
+    const detections = JSON.parse(tree['detections.json']);
+    expect(detections.repositories['shop-api'].receivers).toEqual([
+      {
+        filePath: controller,
+        symbol: 'RefundController',
+        members: { refunds: 'RefundService' },
+      },
+    ]);
+    for (const file of ['topology.json', 'detections.json']) {
+      for (const local of [
+        root,
+        tmpdir(),
+        await realpath(tmpdir()),
+        homedir(),
+      ]) {
+        expect(tree[file]).not.toContain(local);
+      }
+    }
+
+    const second = await buildCodeGraph(config, options);
+    expect(second.reused).toEqual({ 'shop-api': true });
+    expect(await readTree(config.output)).toEqual(tree);
   });
 });

@@ -16,6 +16,7 @@ import { redactSecretValue } from './extractors/site-secrets.js';
 import { compareText } from './files.js';
 import { canonicalJson } from './output.js';
 import type {
+  ClassReceivers,
   Detection,
   DetectionKind,
   DetectionPreset,
@@ -24,6 +25,7 @@ import type {
   GraphBuildState,
   GraphConfig,
   PresetContext,
+  RepositoryBuild,
   RepositoryDetectionState,
   RunDetectionOptions,
 } from './types.js';
@@ -94,16 +96,68 @@ export function sortDetections(detections: readonly Detection[]): Detection[] {
     .map(([, detection]) => detection);
 }
 
-/** detections.json 의 값. 저장소 이름 순서로 그 저장소의 탐지 결과를 담는다 */
+/** detections.json 의 값. 저장소 이름 순서로 그 저장소의 탐지 결과와 클래스 멤버 타입을 담는다 */
 export function detectionsArtifact(state: GraphBuildState): DetectionsArtifact {
-  const names = state.repositories
-    .map((build) => build.manifest.name)
-    .sort(compareText);
+  const builds = [...state.repositories].sort((left, right) =>
+    compareText(left.manifest.name, right.manifest.name),
+  );
   const repositories: Record<string, RepositoryDetectionState> = {};
-  for (const name of names) {
-    repositories[name] = { detections: state.detections.get(name) ?? [] };
+  for (const build of builds) {
+    const name = build.manifest.name;
+    repositories[name] = {
+      detections: state.detections.get(name) ?? [],
+      receivers: repositoryReceivers(build),
+    };
   }
   return { schemaVersion: GRAPH_SCHEMA_VERSION, repositories };
+}
+
+/**
+ * 저장소의 클래스 멤버 타입. 다시 추출한 저장소는 추출 심볼의 members 에서 만들고, 재사용한 저장소는 지난 결과에서 읽는다
+ * 같은 커밋·같은 입력이면 두 길의 값이 같아, 재사용해도 토폴로지가 바뀌지 않는다
+ */
+export function repositoryReceivers(build: RepositoryBuild): ClassReceivers[] {
+  if (!build.extracted) {
+    return build.previousDetections?.receivers ?? [];
+  }
+  const receivers: ClassReceivers[] = [];
+  for (const symbol of build.extracted) {
+    const members: Record<string, string> = {};
+    for (const member of symbol.members ?? []) {
+      const type = member.type ? receiverTypeName(member.type) : undefined;
+      if (type && !(member.name in members)) {
+        members[member.name] = type;
+      }
+    }
+    if (Object.keys(members).length > 0) {
+      receivers.push({
+        filePath: symbol.filePath,
+        symbol: symbol.symbol,
+        members: Object.fromEntries(
+          Object.entries(members).sort(([left], [right]) =>
+            compareText(left, right),
+          ),
+        ),
+      });
+    }
+  }
+  return receivers.sort(
+    (left, right) =>
+      compareText(left.filePath, right.filePath) ||
+      compareText(left.symbol, right.symbol),
+  );
+}
+
+/**
+ * 타입 표기에서 호출을 이을 클래스 이름을 읽는다(`OrderService`, `Repository<Order>` → `Repository`, `shop.RefundService` → `RefundService`)
+ * 합집합·교집합·함수 타입처럼 클래스 하나로 정해지지 않는 표기는 undefined
+ */
+export function receiverTypeName(text: string): string | undefined {
+  const head = text.split('<')[0].split('[')[0].trim();
+  if (!/^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/.test(head)) {
+    return undefined;
+  }
+  return head.slice(head.lastIndexOf('.') + 1);
 }
 
 /** 지난 detections.json 을 저장소 이름 → 탐지 결과로 읽는다. 모양이 틀리면 throw 한다 */
@@ -130,7 +184,13 @@ export function parseDetectionsArtifact(
     const detections = entry.detections.map((detection, index) =>
       checkStoredDetection(detection, repository, `${label}[${index}]`),
     );
-    result.set(repository, { detections });
+    if (!Array.isArray(entry.receivers)) {
+      throw new Error(`${label}: receivers must be an array`);
+    }
+    const receivers = entry.receivers.map((receiver, index) =>
+      checkStoredReceivers(receiver, `${label} receivers[${index}]`),
+    );
+    result.set(repository, { detections, receivers });
   }
   return result;
 }
@@ -316,6 +376,19 @@ function checkStoredDetection(
   }
   checkRequiredFields(detection, detection.kind as DetectionKind, label);
   return detection as unknown as Detection;
+}
+
+function checkStoredReceivers(value: unknown, label: string): ClassReceivers {
+  const entry = requireObject(value, label);
+  const members = requireObject(entry.members, `${label}.members`);
+  if (
+    nonEmptyText(entry.filePath) === undefined ||
+    nonEmptyText(entry.symbol) === undefined ||
+    Object.values(members).some((type) => nonEmptyText(type) === undefined)
+  ) {
+    throw new Error(`${label}: needs filePath, symbol and member type names`);
+  }
+  return entry as unknown as ClassReceivers;
 }
 
 function countByKind(detections: readonly Detection[]): Record<string, number> {

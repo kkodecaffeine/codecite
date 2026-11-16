@@ -8,6 +8,7 @@ import type {
   EntityRelationKind,
   ExecutionFact,
   FieldWriteKind,
+  SystemTopologyGraph,
 } from '../extensions/code-knowledge.js';
 import type { Logger } from '../ports.js';
 import type { SnapshotWorkspace } from './snapshot.js';
@@ -443,6 +444,8 @@ export interface GraphBuildState {
   records: CurrentSymbolRecord[];
   /** 저장소 이름 → 탐지 결과(정렬됨). 탐지 단계가 채우고, 뒤 단계는 읽기만 한다 */
   detections: Map<string, Detection[]>;
+  /** 저장소 안 토폴로지. 토폴로지 단계가 채운다 */
+  topology?: SystemTopologyGraph;
   artifacts: Map<string, unknown>;
 }
 
@@ -624,6 +627,18 @@ export interface DetectionPreset {
 export interface RepositoryDetectionState {
   /** 파일 경로·줄·심볼·종류 순서 */
   detections: Detection[];
+  /**
+   * 클래스 멤버의 타입(`this.<멤버>.<메서드>` 호출을 푸는 데 쓴다). 추출 심볼의 members 는 결과 레코드에 남지 않으므로,
+   * 재사용한 저장소도 같은 토폴로지가 나오도록 여기에 함께 남긴다. 파일 경로·클래스 순서
+   */
+  receivers: ClassReceivers[];
+}
+
+/** 클래스 하나의 멤버 이름 → 타입 이름(제네릭·배열 표기를 뗀 끝 이름). 타입을 읽을 수 있는 멤버만 담는다 */
+export interface ClassReceivers {
+  filePath: string;
+  symbol: string;
+  members: Record<string, string>;
 }
 
 /** detections.json */
@@ -682,3 +697,16 @@ export type ConstantNode =
 
 /** 탐지 필드의 꼴. 탐지 결과를 받을 때 있어야 하는 필드를 검사하는 데 쓴다 */
 export type DetectionFieldShape = 'string' | 'boolean' | 'array';
+
+// ── 토폴로지 ──
+
+export interface SystemTopologyOptions {
+  /** sources 에 남길 추출기 이름 */
+  extractors?: readonly string[];
+  /** sources 에 남길 켠 프리셋 이름 */
+  presets?: readonly string[];
+}
+
+/** 저장소 안 호출 하나를 어떤 규칙으로 이었는지. 신뢰도와 근거 글을 가른다 */
+export type CallResolution =
+  'same-file' | 'imported' | 'own-member' | 'member-type' | 'injected-type';

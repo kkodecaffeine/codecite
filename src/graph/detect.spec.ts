@@ -77,7 +77,9 @@ function build(
     },
     records: [],
     ...(extracted ? { extracted } : {}),
-    ...(previous ? { previousDetections: { detections: previous } } : {}),
+    ...(previous
+      ? { previousDetections: { detections: previous, receivers: [] } }
+      : {}),
   };
 }
 

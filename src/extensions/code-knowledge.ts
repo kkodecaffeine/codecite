@@ -180,6 +180,8 @@ export interface TopologyNode extends CodeLocation {
   aliases?: string[];
   /** 이 노드를 찾은 근거의 짧은 요약 */
   evidence?: string[];
+  /** 0~1. 코드 구조에서 바로 읽은 노드는 1, 탐지기가 찾은 노드는 탐지 신뢰도 가운데 가장 높은 값 */
+  confidence?: number;
   commitSha?: string;
 }
 

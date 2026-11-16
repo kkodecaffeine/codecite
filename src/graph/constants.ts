@@ -1,10 +1,12 @@
 import type { ExecutionFactKind } from '../extensions/code-knowledge.js';
 import type { Logger } from '../ports.js';
 import type {
+  CallResolution,
   DetectionFieldShape,
   DetectionKind,
   FileSkipCounts,
   GraphDetectorKind,
+  GraphqlOperationType,
 } from './types.js';
 
 // ── 설정 ──
@@ -365,6 +367,65 @@ export const CONSTANT_SYMBOL_KINDS: readonly string[] = ['constant', 'enum'];
 export const CLASS_MEMBER_WRAPPER = { open: 'class Owner {\n', close: '\n}' };
 /** 별칭 경로의 흔한 앞머리(`@/`, `~/`, `#/`). 떼고 저장소 안 경로로 맞춰 본다 */
 export const MODULE_ALIAS_PREFIXES: readonly string[] = ['@/', '~/', '#/'];
+
+// ── 저장소 안 토폴로지 ──
+
+export const GRAPH_TOPOLOGY_FILE = 'topology.json';
+/** Class 노드로 그리는 심볼 종류. 열거형은 Enum, 파일 최상위 문장 묶음(module)은 File 노드가 맡고, 나머지는 Function 이다 */
+export const TOPOLOGY_CLASS_KINDS: readonly string[] = [
+  'class',
+  'controller',
+  'entity',
+  'schema',
+];
+/** 저장소 → 파일 → 심볼처럼 코드 구조에서 바로 읽은 노드·간선의 신뢰도 */
+export const TOPOLOGY_STRUCTURE_CONFIDENCE = 1;
+/**
+ * 저장소 안 호출을 이은 규칙별 신뢰도. 후보가 정확히 하나일 때만 잇고, 이름만으로 타입을 짐작한 경우를 가장 낮게 둔다
+ * - same-file: 같은 파일의 이름, imported: 가져온 모듈의 이름, own-member: `this.메서드`
+ * - member-type: 클래스 멤버의 타입 표기로 찾은 `this.멤버.메서드`
+ * - injected-type: 멤버 목록이 없어 주입 타입 이름과 멤버 이름이 같다는 것으로 찾은 `this.멤버.메서드`
+ */
+export const TOPOLOGY_CALL_CONFIDENCE: Readonly<
+  Record<CallResolution, number>
+> = {
+  'same-file': 0.9,
+  imported: 0.9,
+  'own-member': 0.9,
+  'member-type': 0.85,
+  'injected-type': 0.7,
+};
+/** 자원 노드를 선언하는 탐지. 노드의 위치는 이 탐지의 자리를 쓰는 자리보다 앞세운다 */
+export const DEFINING_DETECTIONS: readonly DetectionKind[] = [
+  'http-route',
+  'graphql-resolver',
+  'schedule',
+  'entity-declaration',
+];
+/** 노드·간선 하나에 남기는 근거 글 수. 근거는 정렬한 뒤 앞에서부터 남긴다 */
+export const TOPOLOGY_MAX_EVIDENCE = 20;
+/** `this` 처럼 지금 클래스를 가리키는 받는 쪽 이름 */
+export const TOPOLOGY_SELF_RECEIVERS: readonly string[] = [
+  'this',
+  'self',
+  'cls',
+];
+/** GraphQL 연산 종류 → 루트 타입 이름 */
+export const GRAPHQL_ROOT_TYPES: Readonly<
+  Record<GraphqlOperationType, string>
+> = {
+  query: 'Query',
+  mutation: 'Mutation',
+  subscription: 'Subscription',
+};
+/** 바깥 서비스로 보지 않는 자기 컴퓨터 주소 */
+export const LOOPBACK_HOSTS: readonly string[] = [
+  'localhost',
+  '127.0.0.1',
+  '0.0.0.0',
+  '::1',
+  '[::1]',
+];
 
 // ── git ──
 

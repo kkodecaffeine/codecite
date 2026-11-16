@@ -12,10 +12,12 @@ export {
   GRAPH_DEFAULT_EXCLUDES,
   GRAPH_DEFAULT_OUTPUT,
   GRAPH_FLOOR_EXCLUDES,
+  GRAPH_TOPOLOGY_FILE,
 } from './constants.js';
 export {
   detectionsArtifact,
   parseDetectionsArtifact,
+  repositoryReceivers,
   runDetection,
   sortDetections,
 } from './detect.js';
@@ -40,4 +42,5 @@ export {
   validateCurrentSymbolRecord,
 } from './records.js';
 export { redactSecretLiterals } from './redaction.js';
+export { buildSystemTopology, normalizeMessageName } from './topology.js';
 export { GitCommandError } from './snapshot.js';

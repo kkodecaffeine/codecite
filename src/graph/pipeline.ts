@@ -1,5 +1,5 @@
-// 그래프 만들기 파이프라인. 지금은 스냅샷 → 파일 고르기 → 추출 → 레코드 → 탐지 → 결과 파일까지 한다
-// 저장소 안 토폴로지·저장소 간 연결·엔티티·필드 쓰기·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
+// 그래프 만들기 파이프라인. 지금은 스냅샷 → 파일 고르기 → 추출 → 레코드 → 탐지 → 저장소 안 토폴로지 → 결과 파일까지 한다
+// 저장소 간 연결·엔티티·필드 쓰기·보고서 단계는 buildCodeGraph 안의 표시한 자리에 더한다
 import { readFile, realpath } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +11,7 @@ import {
   GRAPH_OUTPUT_FORMAT,
   GRAPH_SCHEMA_VERSION,
   GRAPH_TOOL_NAME,
+  GRAPH_TOPOLOGY_FILE,
   SILENT_LOGGER,
 } from './constants.js';
 import {
@@ -29,6 +30,7 @@ import {
 import {
   assertNoSymbolCollapse,
   fingerprint,
+  latestCommittedAt,
   readGraphArtifact,
   readGraphManifest,
   readRepositorySymbols,
@@ -37,6 +39,7 @@ import {
 } from './output.js';
 import { resolvePresets } from './presets/registry.js';
 import { buildRepositoryRecords, parseGroupPattern } from './records.js';
+import { buildSystemTopology } from './topology.js';
 import { scrubMessage } from './redaction.js';
 import {
   listTrackedFiles,
@@ -66,6 +69,7 @@ import type {
  * - 바뀐 저장소만 임시 폴더에 꺼내, 고른 파일을 확장자로 추출기에 나눠 넘긴다. 추출기가 없으면 빈 결과를 쓴다
  * - 심볼 수가 지난번의 절반 아래로 줄면 아무것도 쓰지 않고 멈춘다
  * - 켠 프리셋으로 저장소마다 계약을 탐지해 detections.json 에 남긴다. 재사용한 저장소는 지난 탐지 결과를 그대로 쓴다
+ * - 레코드와 탐지 결과로 저장소 안 토폴로지를 그려 topology.json 에 남긴다
  * 임시 폴더는 성공·실패와 상관없이 지운다
  */
 export async function buildCodeGraph(
@@ -136,9 +140,15 @@ export async function buildCodeGraph(
     state.detections = await runDetection(state, presets, { logger });
     state.artifacts.set(GRAPH_DETECTIONS_FILE, detectionsArtifact(state));
 
-    // ── 저장소 안 토폴로지가 여기에 단계를 더한다 ──
-    // state.records 와 state.detections 를 읽어 state.artifacts 에 topology.json 을 넣는다
-    // ── 저장소 간 연결·엔티티·필드 쓰기·보고서가 그 뒤에 단계를 더한다 ──
+    // ── 저장소 안 토폴로지: state.topology 에 두고 topology.json 으로 쓴다 ──
+    state.topology = buildSystemTopology(state, state.detections, {
+      extractors: extractors.map((extractor) => extractor.name),
+      presets: presets.map((preset) => preset.name),
+    });
+    state.artifacts.set(GRAPH_TOPOLOGY_FILE, state.topology);
+
+    // ── 저장소 간 연결·엔티티·필드 쓰기·보고서가 여기에 단계를 더한다 ──
+    // state.records, state.detections, state.topology 를 읽어
     // cross-repository.json, entities.json, field-writers.json, report.json 을 state.artifacts 에 넣는다
 
     const manifest = buildManifest(config, repositories, toolVersion);
@@ -519,12 +529,9 @@ function buildManifest(
   const entries = repositories
     .map((build) => build.manifest)
     .sort((left, right) => compareText(left.name, right.name));
-  const generatedAt = entries
-    .map((entry) => entry.committedAt)
-    .reduce((latest, value) => (value > latest ? value : latest), '');
   return {
     schemaVersion: GRAPH_SCHEMA_VERSION,
-    generatedAt: generatedAt || new Date(0).toISOString(),
+    generatedAt: latestCommittedAt(entries),
     tool: { name: GRAPH_TOOL_NAME, version: toolVersion },
     configFingerprint: configFingerprint(config),
     repositories: entries,

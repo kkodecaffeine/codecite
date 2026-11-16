@@ -216,6 +216,16 @@ export function assertNoSymbolCollapse(
   }
 }
 
+/** 저장소 커밋 시각 가운데 가장 늦은 것. 결과 파일의 generatedAt 으로 쓴다(만든 시각을 넣으면 같은 입력에 다른 출력이 나온다) */
+export function latestCommittedAt(
+  repositories: readonly { committedAt: string }[],
+): string {
+  const latest = repositories
+    .map((repository) => repository.committedAt)
+    .reduce((current, value) => (value > current ? value : current), '');
+  return latest || new Date(0).toISOString();
+}
+
 /** 결과 폴더의 JSON 결과 파일 하나. 없으면 undefined, JSON 이 아니면 throw 한다 */
 export async function readGraphArtifact(
   output: string,
